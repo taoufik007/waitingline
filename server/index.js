@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import net from 'node:net';
+import { pathToFileURL } from 'url';
 
 import {
   generateOtpCode,
@@ -40,8 +42,26 @@ import { normalizeRole } from './roleUtils.js';
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT || 3001);
-// accounts and pending OTPs are persisted in server/data.json via storage.js
+const DEFAULT_PORT = Number(process.env.PORT || 3001);
+const findAvailablePort = (startPort) => new Promise((resolve, reject) => {
+  const tester = net.createServer();
+
+  tester.once('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      resolve(findAvailablePort(startPort + 1));
+      return;
+    }
+
+    reject(error);
+  });
+
+  tester.once('listening', () => {
+    tester.close(() => resolve(startPort));
+  });
+
+  tester.listen(startPort);
+});
+// accounts, pending OTPs and entities are persisted in Netlify Database via storage.js
 
 app.use(cors());
 app.use(express.json());
@@ -59,7 +79,7 @@ const createUser = (email, password, displayName = '', role = 'admin', parentAdm
 
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const buildResetPasswordUrl = (token) => {
-  const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5173';
+  const baseUrl = process.env.APP_BASE_URL || process.env.URL || 'http://localhost:5173';
   return `${baseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
 };
 const createPasswordResetToken = () => crypto.randomBytes(32).toString('hex');
@@ -1046,6 +1066,25 @@ app.get('/api/session-check', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Waiting Line auth server running on http://localhost:${PORT}`);
-});
+export default app;
+
+// Lancement autonome (développement local : `node server/index.js`).
+// En production, l'app est servie par la Netlify Function netlify/functions/api.mjs.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const requestedPort = Number(process.env.PORT || 3001);
+
+  findAvailablePort(requestedPort || DEFAULT_PORT)
+    .then((resolvedPort) => {
+      if (resolvedPort !== requestedPort && requestedPort) {
+        console.warn(`Port ${requestedPort} is busy; using ${resolvedPort} instead.`);
+      }
+
+      app.listen(resolvedPort, () => {
+        console.log(`Waiting Line auth server running on http://localhost:${resolvedPort}`);
+      });
+    })
+    .catch((error) => {
+      console.error('Unable to start Waiting Line auth server:', error);
+      process.exit(1);
+    });
+}

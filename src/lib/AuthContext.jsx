@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { isPublicAccessRoute } from '@/lib/accessRules';
 
 const AuthContext = createContext();
 
@@ -65,6 +66,14 @@ const savedToken = base44.auth.hasToken();      if (savedToken) {
       setAuthChecked(true);
 
       if (error.status === 401 || error.status === 403) {
+        const pathname = window.location.pathname;
+        if (isPublicAccessRoute(pathname)) {
+          setUser(null);
+          setIsAuthenticated(false);
+          setAuthError(null);
+          return;
+        }
+
         setAuthError({
           type: 'auth_required',
           message: 'Authentication required',

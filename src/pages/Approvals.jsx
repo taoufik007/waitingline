@@ -103,7 +103,16 @@ export default function Approvals() {
       const res = await fetch('/api/approvals/pending-users', {
         headers: { 'x-approvals-token': token },
       });
-      if (!res.ok) throw new Error('failed');
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          clearApprovalsSession();
+          setApprovalsUser(null);
+          window.location.replace('/approvals/login');
+          return;
+        }
+        throw new Error(payload.message || 'failed');
+      }
       const data = await res.json();
       const nextClients = Array.isArray(data.clients)
         ? data.clients.filter((client) => normalizeRole(client?.role || 'admin') === 'admin')

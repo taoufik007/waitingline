@@ -27,5 +27,6 @@ curl -X POST http://localhost:3001/api/auth/provider-login \\
   -d '{"provider":"google","email":"test+gsi@local.dev","name":"Test GSI"}'
 
 Notes:
-- Ensure server is running: `node server/index.js`
+- Run the app locally with `netlify dev --port 8889` (the API needs Netlify Database, which `netlify dev` provides) and replace `http://localhost:3001` with `http://localhost:8889` in the commands above.
+- In production the API is served by the Netlify Function `netlify/functions/api.mjs` at `https://waitingline.netlify.app/api/*`.
 - In production configure RESEND_API_KEY or SMTP_* env vars for real email delivery.

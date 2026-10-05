@@ -11,7 +11,7 @@
       "emailVerified": true,
       "approver": true,
       "approved": true,
-      "approvalToken": "waitingline_user_1790376631200_cb163fc794a6_1790859454985",
+      "approvalToken": "waitingline_user_1790376631200_cb163fc794a6_1791233597421",
       "active": true,
       "sessionToken": "waitingline_user_1790376631200_cb163fc794a6_1790853009320",
       "sessionTokens": [
@@ -29,11 +29,9 @@
       "emailVerified": true,
       "approved": true,
       "approvedAt": 1790523161446,
-      "sessionToken": "waitingline_user_1790523112170_0f02568076436_1791207563953",
+      "sessionToken": "waitingline_user_1790523112170_0f02568076436_1791233626966",
       "active": true,
       "sessionTokens": [
-        "waitingline_user_1790523112170_0f02568076436_1790848125241",
-        "waitingline_user_1790523112170_0f02568076436_1790848196695",
         "waitingline_user_1790523112170_0f02568076436_1790850204030",
         "waitingline_user_1790523112170_0f02568076436_1790850805221",
         "waitingline_user_1790523112170_0f02568076436_1790851265693",
@@ -51,7 +49,9 @@
         "waitingline_user_1790523112170_0f02568076436_1790971826404",
         "waitingline_user_1790523112170_0f02568076436_1790979473121",
         "waitingline_user_1790523112170_0f02568076436_1790979575452",
-        "waitingline_user_1790523112170_0f02568076436_1791207563953"
+        "waitingline_user_1790523112170_0f02568076436_1791207563953",
+        "waitingline_user_1790523112170_0f02568076436_1791233446977",
+        "waitingline_user_1790523112170_0f02568076436_1791233626966"
       ],
       "displayMode": "dark"
     },
@@ -112,7 +112,6 @@
         "waitingline_user_1790895856393_1902d5004d109_1790979545778"
       ]
     },
-
     "serrafidriss@gmail.com": {
       "id": "user_1790957466010_5eefc19585895",
       "email": "serrafidriss@gmail.com",

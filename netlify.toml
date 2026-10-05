@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Application monopage (React Router) : toutes les routes renvoient index.html.
+# Les appels /api/* sont servis en priorité par la fonction netlify/functions/api.mjs.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

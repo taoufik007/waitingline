@@ -22,6 +22,7 @@ import Approvals from '@/pages/Approvals';
 import ApprovalsLogin from '@/pages/ApprovalsLogin';
 import ImpersonateBridge from '@/pages/ImpersonateBridge';
 import LandingPage from '@/pages/LandingPage';
+import { isPublicAccessRoute } from '@/lib/accessRules';
 
 const applyThemeClass = (theme) => {
   const root = document.documentElement;
@@ -35,15 +36,13 @@ const ThemeInitializer = () => {
 
   useEffect(() => {
     const pathname = window.location.pathname;
-    const isApprovalsRoute = pathname.startsWith('/approvals');
-    const isMirrorRoute = pathname.startsWith('/mirror');
 
-    if (isApprovalsRoute) {
+    if (pathname.startsWith('/approvals')) {
       applyThemeClass('light');
       return;
     }
 
-    if (isMirrorRoute) {
+    if (pathname.startsWith('/mirror') || pathname === '/ecran') {
       applyThemeClass('dark');
       return;
     }
@@ -78,10 +77,8 @@ const AuthenticatedApp = () => {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
       const pathname = window.location.pathname;
-      const isPublicDisplayRoute = pathname.startsWith('/mirror') || pathname === '/ecran';
 
-      // Public mirror route and display screen can be visited without login.
-      if (!pathname.startsWith('/approvals') && !isPublicDisplayRoute) {
+      if (!isPublicAccessRoute(pathname)) {
         navigateToLogin();
         return null;
       }
