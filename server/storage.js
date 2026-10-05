@@ -1,127 +1,63 @@
-import fs from 'fs/promises';
-import path from 'path';
-import crypto from 'crypto';
+import { and, eq } from 'drizzle-orm';
+
+import { db } from '../db/index.ts';
+import { accounts, entities, passwordResetTokens, pendingOtps } from '../db/schema.ts';
 
 // ─────────────────────────────────────────────────────────────
-// PARTIE 1 : COMPTES + OTP → data.json (fichier global, verrou global)
+// PARTIE 1 : COMPTES + OTP + TOKENS DE RESET → Netlify Database
+// Chaque objet est stocké tel quel (JSONB), indexé par sa clé.
 // ─────────────────────────────────────────────────────────────
 
-const DATA_FILE = path.join(process.cwd(), 'server', 'data.json');
-
-const defaultData = {
-  accounts: {},
-  pendingOtps: {},
-  passwordResetTokens: {},
+const getOne = async (table, keyColumn, key) => {
+  const [row] = await db.select({ data: table.data }).from(table).where(eq(keyColumn, key)).limit(1);
+  return row?.data ?? null;
 };
 
-let globalWriteChain = Promise.resolve();
-const withGlobalLock = (task) => {
-  const run = globalWriteChain.then(task, task);
-  globalWriteChain = run.then(() => {}, () => {});
-  return run;
+const upsert = async (table, keyColumn, keyName, key, data) => {
+  await db
+    .insert(table)
+    .values({ [keyName]: key, data })
+    .onConflictDoUpdate({ target: keyColumn, set: { data } });
+  return data;
 };
 
-const readGlobalData = async () => {
-  try {
-    const raw = await fs.readFile(DATA_FILE, 'utf8');
-    const parsed = JSON.parse(raw || '{}');
-    return {
-      accounts: parsed.accounts || {},
-      pendingOtps: parsed.pendingOtps || {},
-      passwordResetTokens: parsed.passwordResetTokens || {},
-    };
-  } catch (err) {
-    if (err?.code === 'ENOENT') return { ...defaultData };
-    throw err;
-  }
+const removeOne = async (table, keyColumn, key) => {
+  await db.delete(table).where(eq(keyColumn, key));
+  return true;
 };
 
-const writeGlobalData = async (data) => {
-  const tmp = `${DATA_FILE}.tmp`;
-  await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-  await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-  await fs.rename(tmp, DATA_FILE);
-};
+export const getAccount = (email) => getOne(accounts, accounts.email, email);
 
-export const getAccount = async (email) => {
-  const data = await readGlobalData();
-  return data.accounts[email] || null;
-};
-
-export const hasAccount = async (email) => {
-  const acc = await getAccount(email);
-  return !!acc;
-};
+export const hasAccount = async (email) => !!(await getAccount(email));
 
 export const listAccounts = async () => {
-  const data = await readGlobalData();
-  return Object.values(data.accounts);
+  const rows = await db.select({ data: accounts.data }).from(accounts);
+  return rows.map((row) => row.data);
 };
 
-export const setAccount = (email, account) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    data.accounts[email] = account;
-    await writeGlobalData(data);
-    return account;
-  });
+export const setAccount = (email, account) => upsert(accounts, accounts.email, 'email', email, account);
 
-export const deleteAccount = (email) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    if (data.accounts[email]) delete data.accounts[email];
-    await writeGlobalData(data);
-    return true;
-  });
+export const deleteAccount = (email) => removeOne(accounts, accounts.email, email);
 
-export const getPendingOtp = async (email) => {
-  const data = await readGlobalData();
-  return data.pendingOtps[email] || null;
-};
+export const getPendingOtp = (email) => getOne(pendingOtps, pendingOtps.email, email);
 
-export const setPendingOtp = (email, payload) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    data.pendingOtps[email] = payload;
-    await writeGlobalData(data);
-    return payload;
-  });
+export const setPendingOtp = (email, payload) => upsert(pendingOtps, pendingOtps.email, 'email', email, payload);
 
-export const deletePendingOtp = (email) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    if (data.pendingOtps[email]) delete data.pendingOtps[email];
-    await writeGlobalData(data);
-    return true;
-  });
+export const deletePendingOtp = (email) => removeOne(pendingOtps, pendingOtps.email, email);
 
-export const getPasswordResetToken = async (token) => {
-  const data = await readGlobalData();
-  return data.passwordResetTokens[token] || null;
-};
+export const getPasswordResetToken = (token) =>
+  getOne(passwordResetTokens, passwordResetTokens.token, token);
 
 export const setPasswordResetToken = (token, payload) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    data.passwordResetTokens[token] = payload;
-    await writeGlobalData(data);
-    return payload;
-  });
+  upsert(passwordResetTokens, passwordResetTokens.token, 'token', token, payload);
 
 export const deletePasswordResetToken = (token) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    if (data.passwordResetTokens[token]) delete data.passwordResetTokens[token];
-    await writeGlobalData(data);
-    return true;
-  });
+  removeOne(passwordResetTokens, passwordResetTokens.token, token);
 
 // ─────────────────────────────────────────────────────────────
-// PARTIE 2 : SERVICES / GUICHETS / TICKETS → un fichier par client
-// (server/data-clients/<hash-de-l-email>.json), verrou par client
+// PARTIE 2 : SERVICES / GUICHETS / TICKETS → table `entities`,
+// cloisonnée par ownerEmail
 // ─────────────────────────────────────────────────────────────
-
-const ENTITIES_DIR = path.join(process.cwd(), 'server', 'data-clients');
 
 const VALID_ENTITY_TYPES = ['services', 'counters', 'tickets'];
 
@@ -133,99 +69,56 @@ const assertValidType = (type) => {
   }
 };
 
-// Même fonction de hash que dans le script de migration : ne pas modifier
-// sans re-migrer, sinon les fichiers existants ne seront plus retrouvés.
-export const fileForOwner = (ownerEmail) => {
-  const hash = crypto.createHash('sha256').update(ownerEmail).digest('hex').slice(0, 24);
-  return path.join(ENTITIES_DIR, `${hash}.json`);
+const notFound = () => {
+  const err = new Error('Entity not found');
+  err.status = 404;
+  return err;
 };
 
-const defaultOwnerEntities = {
-  services: [],
-  counters: [],
-  tickets: [],
-};
-
-const readOwnerEntities = async (ownerEmail) => {
-  try {
-    const raw = await fs.readFile(fileForOwner(ownerEmail), 'utf8');
-    const parsed = JSON.parse(raw || '{}');
-    return {
-      services: parsed.services || [],
-      counters: parsed.counters || [],
-      tickets: parsed.tickets || [],
-    };
-  } catch (err) {
-    if (err?.code === 'ENOENT') return { ...defaultOwnerEntities };
-    throw err;
-  }
-};
-
-const writeOwnerEntities = async (ownerEmail, entities) => {
-  const file = fileForOwner(ownerEmail);
-  const tmp = `${file}.tmp`;
-  await fs.mkdir(ENTITIES_DIR, { recursive: true });
-  await fs.writeFile(tmp, JSON.stringify(entities, null, 2), 'utf8');
-  await fs.rename(tmp, file);
-};
-
-const locksByOwner = new Map();
-const withOwnerLock = (ownerEmail, task) => {
-  const previous = locksByOwner.get(ownerEmail) || Promise.resolve();
-  const run = previous.then(task, task);
-  locksByOwner.set(
-    ownerEmail,
-    run.then(() => {}, () => {})
-  );
-  return run;
-};
+const entityScope = (type, id, ownerEmail) =>
+  and(eq(entities.id, id), eq(entities.type, type), eq(entities.ownerEmail, ownerEmail));
 
 export const listEntities = async (type, ownerEmail) => {
   assertValidType(type);
-  const entities = await readOwnerEntities(ownerEmail);
-  return entities[type];
+  const rows = await db
+    .select({ data: entities.data })
+    .from(entities)
+    .where(and(eq(entities.type, type), eq(entities.ownerEmail, ownerEmail)));
+  return rows.map((row) => row.data);
 };
 
-export const createEntity = (type, ownerEmail, fields) =>
-  withOwnerLock(ownerEmail, async () => {
-    assertValidType(type);
-    const entities = await readOwnerEntities(ownerEmail);
-    const entity = {
-      id: `${type}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      ownerEmail,
-      ...fields,
-    };
-    entities[type].push(entity);
-    await writeOwnerEntities(ownerEmail, entities);
-    return entity;
-  });
+export const createEntity = async (type, ownerEmail, fields) => {
+  assertValidType(type);
+  const entity = {
+    id: `${type}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    ownerEmail,
+    ...fields,
+  };
+  await db.insert(entities).values({ id: entity.id, type, ownerEmail, data: entity });
+  return entity;
+};
 
-export const updateEntity = (type, id, ownerEmail, patch) =>
-  withOwnerLock(ownerEmail, async () => {
-    assertValidType(type);
-    const entities = await readOwnerEntities(ownerEmail);
-    const index = entities[type].findIndex((item) => item.id === id);
-    if (index === -1) {
-      const err = new Error('Entity not found');
-      err.status = 404;
-      throw err;
-    }
-    entities[type][index] = { ...entities[type][index], ...patch };
-    await writeOwnerEntities(ownerEmail, entities);
-    return entities[type][index];
+export const updateEntity = async (type, id, ownerEmail, patch) => {
+  assertValidType(type);
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ data: entities.data })
+      .from(entities)
+      .where(entityScope(type, id, ownerEmail))
+      .for('update');
+    if (!row) throw notFound();
+    const updated = { ...row.data, ...patch };
+    await tx.update(entities).set({ data: updated }).where(entityScope(type, id, ownerEmail));
+    return updated;
   });
+};
 
-export const deleteEntity = (type, id, ownerEmail) =>
-  withOwnerLock(ownerEmail, async () => {
-    assertValidType(type);
-    const entities = await readOwnerEntities(ownerEmail);
-    const before = entities[type].length;
-    entities[type] = entities[type].filter((item) => item.id !== id);
-    if (entities[type].length === before) {
-      const err = new Error('Entity not found');
-      err.status = 404;
-      throw err;
-    }
-    await writeOwnerEntities(ownerEmail, entities);
-    return true;
-  });
+export const deleteEntity = async (type, id, ownerEmail) => {
+  assertValidType(type);
+  const deleted = await db
+    .delete(entities)
+    .where(entityScope(type, id, ownerEmail))
+    .returning({ id: entities.id });
+  if (deleted.length === 0) throw notFound();
+  return true;
+};
