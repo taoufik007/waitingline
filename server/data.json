@@ -112,20 +112,7 @@
         "waitingline_user_1790895856393_1902d5004d109_1790979545778"
       ]
     },
-    "elfaroukikamal26@gmail.com": {
-      "id": "user_1790951837493_9e6e3b45a3b33",
-      "email": "elfaroukikamal26@gmail.com",
-      "name": "kamal elfarouk",
-      "role": "admin",
-      "password": "2001Touto@",
-      "parentAdminEmail": "",
-      "displayMode": "light",
-      "createdAt": 1790951837494,
-      "emailVerified": true,
-      "approved": true,
-      "active": true,
-      "approvedAt": 1790952545909
-    },
+
     "serrafidriss@gmail.com": {
       "id": "user_1790957466010_5eefc19585895",
       "email": "serrafidriss@gmail.com",
