@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OAuth Callback</title>
+  </head>
+  <body>
+    <script>
+      // Send the fragment (hash) back to the opener window and close the popup
+      try {
+        if (window.opener && window.location.hash) {
+          window.opener.postMessage({ hash: window.location.hash }, window.location.origin);
+        }
+      } catch (e) {
+        // ignore
+      }
+      // give the message time to be delivered
+      setTimeout(() => window.close(), 500);
+    </script>
+    <p>Completing sign-in… You can close this window.</p>
+  </body>
+</html>

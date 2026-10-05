@@ -1,0 +1,178 @@
+{
+  "accounts": {
+    "taoufikserrafi7@gmail.com": {
+      "id": "user_1790376631200_cb163fc794a6",
+      "email": "taoufikserrafi7@gmail.com",
+      "name": "taoufik serrafi",
+      "role": "admin",
+      "password": "2001Touto@@",
+      "createdAt": 1790376631200,
+      "provider": "google",
+      "emailVerified": true,
+      "approver": true,
+      "approved": true,
+      "approvalToken": "waitingline_user_1790376631200_cb163fc794a6_1790859454985",
+      "active": true,
+      "sessionToken": "waitingline_user_1790376631200_cb163fc794a6_1790853009320",
+      "sessionTokens": [
+        "waitingline_user_1790376631200_cb163fc794a6_1790805759483",
+        "waitingline_user_1790376631200_cb163fc794a6_1790853009320"
+      ]
+    },
+    "zhiri.nouhailaa@gmail.com": {
+      "id": "user_1790523112170_0f02568076436",
+      "email": "zhiri.nouhailaa@gmail.com",
+      "name": "zhiri nouhaila",
+      "role": "admin",
+      "password": "2001Touto@",
+      "createdAt": 1790523112170,
+      "emailVerified": true,
+      "approved": true,
+      "approvedAt": 1790523161446,
+      "sessionToken": "waitingline_user_1790523112170_0f02568076436_1791207563953",
+      "active": true,
+      "sessionTokens": [
+        "waitingline_user_1790523112170_0f02568076436_1790848125241",
+        "waitingline_user_1790523112170_0f02568076436_1790848196695",
+        "waitingline_user_1790523112170_0f02568076436_1790850204030",
+        "waitingline_user_1790523112170_0f02568076436_1790850805221",
+        "waitingline_user_1790523112170_0f02568076436_1790851265693",
+        "waitingline_user_1790523112170_0f02568076436_1790852697050",
+        "waitingline_user_1790523112170_0f02568076436_1790853165205",
+        "waitingline_user_1790523112170_0f02568076436_1790857754824",
+        "waitingline_user_1790523112170_0f02568076436_1790857761807",
+        "waitingline_user_1790523112170_0f02568076436_1790857784789",
+        "waitingline_user_1790523112170_0f02568076436_1790857794851",
+        "waitingline_user_1790523112170_0f02568076436_1790859336408",
+        "waitingline_user_1790523112170_0f02568076436_1790894629532",
+        "waitingline_user_1790523112170_0f02568076436_1790895553163",
+        "waitingline_user_1790523112170_0f02568076436_1790957190415",
+        "waitingline_user_1790523112170_0f02568076436_1790971368849",
+        "waitingline_user_1790523112170_0f02568076436_1790971826404",
+        "waitingline_user_1790523112170_0f02568076436_1790979473121",
+        "waitingline_user_1790523112170_0f02568076436_1790979575452",
+        "waitingline_user_1790523112170_0f02568076436_1791207563953"
+      ],
+      "displayMode": "dark"
+    },
+    "bepure.labs@gmail.com": {
+      "id": "user_1790847757998_bccc1853694a6",
+      "email": "bepure.labs@gmail.com",
+      "name": "be pure",
+      "role": "agent",
+      "password": "2001Touto@@",
+      "parentAdminEmail": "zhiri.nouhailaa@gmail.com",
+      "createdAt": 1790847757998,
+      "emailVerified": true,
+      "approved": true,
+      "active": true,
+      "assignedServiceIds": [
+        "services_1790542122640_0960b79813b06"
+      ],
+      "assignedCounterIds": [
+        "services_1790542122640_0960b79813b06"
+      ],
+      "sessionToken": "waitingline_user_1790847757998_bccc1853694a6_1790895586248",
+      "sessionTokens": [
+        "waitingline_user_1790847757998_bccc1853694a6_1790847791865",
+        "waitingline_user_1790847757998_bccc1853694a6_1790849773101",
+        "waitingline_user_1790847757998_bccc1853694a6_1790849799514",
+        "waitingline_user_1790847757998_bccc1853694a6_1790853076304",
+        "waitingline_user_1790847757998_bccc1853694a6_1790853276363",
+        "waitingline_user_1790847757998_bccc1853694a6_1790857728361",
+        "waitingline_user_1790847757998_bccc1853694a6_1790895586248"
+      ],
+      "displayMode": "light"
+    },
+    "nounazh659@gmail.com": {
+      "id": "user_1790895856393_1902d5004d109",
+      "email": "nounazh659@gmail.com",
+      "name": "nouhaila zhiri",
+      "role": "agent",
+      "password": "2001Touto@@",
+      "parentAdminEmail": "zhiri.nouhailaa@gmail.com",
+      "displayMode": "dark",
+      "createdAt": 1790895856393,
+      "emailVerified": true,
+      "approved": true,
+      "active": true,
+      "assignedServiceIds": [
+        "services_1790542130775_cb2280bd7da0f",
+        "services_1790542122640_0960b79813b06"
+      ],
+      "assignedCounterIds": [
+        "services_1790542130775_cb2280bd7da0f",
+        "services_1790542122640_0960b79813b06"
+      ],
+      "sessionToken": "waitingline_user_1790895856393_1902d5004d109_1790979545778",
+      "sessionTokens": [
+        "waitingline_user_1790895856393_1902d5004d109_1790895926900",
+        "waitingline_user_1790895856393_1902d5004d109_1790895931956",
+        "waitingline_user_1790895856393_1902d5004d109_1790896053718",
+        "waitingline_user_1790895856393_1902d5004d109_1790979545778"
+      ]
+    },
+    "elfaroukikamal26@gmail.com": {
+      "id": "user_1790951837493_9e6e3b45a3b33",
+      "email": "elfaroukikamal26@gmail.com",
+      "name": "kamal elfarouk",
+      "role": "admin",
+      "password": "2001Touto@",
+      "parentAdminEmail": "",
+      "displayMode": "light",
+      "createdAt": 1790951837494,
+      "emailVerified": true,
+      "approved": true,
+      "active": true,
+      "approvedAt": 1790952545909
+    },
+    "serrafidriss@gmail.com": {
+      "id": "user_1790957466010_5eefc19585895",
+      "email": "serrafidriss@gmail.com",
+      "name": "idris serrafi",
+      "role": "agent",
+      "password": "2001Touto@",
+      "parentAdminEmail": "zhiri.nouhailaa@gmail.com",
+      "displayMode": "light",
+      "createdAt": 1790957466010,
+      "emailVerified": true,
+      "approved": true,
+      "active": true,
+      "assignedServiceIds": [
+        "services_1790542130775_cb2280bd7da0f",
+        "services_1790542122640_0960b79813b06"
+      ],
+      "assignedCounterIds": [
+        "services_1790542130775_cb2280bd7da0f",
+        "services_1790542122640_0960b79813b06"
+      ],
+      "sessionToken": "waitingline_user_1790957466010_5eefc19585895_1790957945915",
+      "sessionTokens": [
+        "waitingline_user_1790957466010_5eefc19585895_1790957945915"
+      ]
+    }
+  },
+  "pendingOtps": {},
+  "passwordResetTokens": {
+    "e00c1dbf23f040aacf11c8e2836c50f8bce8895a6ea5a3b89a4b06aa65923742": {
+      "email": "nounazh659@gmail.com",
+      "createdAt": 1790895939844,
+      "expiresAt": 1790899539844
+    },
+    "5bc9b3c87b9310cecc8f9b5cc35d81418953088ed472135ef4eeabbac8ffd5da": {
+      "email": "nounazh659@gmail.com",
+      "createdAt": 1790950866641,
+      "expiresAt": 1790954466641
+    },
+    "9acb8e3946365966365e9aaf9bbb27fb4f9104446b764680d290a488d6cf7675": {
+      "email": "elfaroukikamal26@gmail.com",
+      "createdAt": 1790952512485,
+      "expiresAt": 1790956112485
+    },
+    "bd7d2caf5b61f117e0d6e50c22a89120f82fbc71908ba36ea4b03dc70d45902a": {
+      "email": "elfaroukikamal26@gmail.com",
+      "createdAt": 1790969692411,
+      "expiresAt": 1790973292411
+    }
+  }
+}

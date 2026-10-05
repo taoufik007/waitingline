@@ -1,0 +1,335 @@
+{
+  "services": [
+    {
+      "id": "services_1790541925759_73dd695d0c3fc",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "name": "Achat ",
+      "prefix": "A",
+      "color": "#000614",
+      "active": true
+    },
+    {
+      "id": "services_1790541936548_075a18967e58",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "name": "Reclamation",
+      "prefix": "R",
+      "color": "#000614",
+      "active": true
+    },
+    {
+      "id": "services_1790596141191_2e8d072c39687",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "name": "vente",
+      "prefix": "V",
+      "color": "#4bff0a",
+      "active": true
+    }
+  ],
+  "counters": [
+    {
+      "id": "counters_1790541947511_e94ad93b9b256",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "name": "Guichet 1",
+      "service_ids": [
+        "services_1790541925759_73dd695d0c3fc"
+      ],
+      "status": "available",
+      "current_ticket_id": ""
+    },
+    {
+      "id": "counters_1790541954226_950574f62b84d",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "name": "Guichet 2",
+      "service_ids": [
+        "services_1790541936548_075a18967e58"
+      ],
+      "status": "busy",
+      "current_ticket_id": "tickets_1790783850423_35fbdd79fd386"
+    },
+    {
+      "id": "counters_1790541960455_5e1cde44a69b1",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "name": "Guichet 3",
+      "service_ids": [
+        "services_1790541925759_73dd695d0c3fc",
+        "services_1790541936548_075a18967e58"
+      ],
+      "status": "busy",
+      "current_ticket_id": "tickets_1790783846860_8300ff1d1f354"
+    },
+    {
+      "id": "counters_1790596208807_293c59e034706",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "name": "etage 1 bureux 3",
+      "service_ids": [
+        "services_1790541925759_73dd695d0c3fc"
+      ],
+      "status": "busy",
+      "current_ticket_id": "tickets_1790783852057_ee0ea3a3e137f"
+    }
+  ],
+  "tickets": [
+    {
+      "id": "tickets_1790541973732_773e11784fbca",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-27T20:46:13.727Z",
+      "number": 1,
+      "code": "A001",
+      "service_id": "services_1790541925759_73dd695d0c3fc",
+      "category": "normal",
+      "counter_id": "counters_1790541947511_e94ad93b9b256",
+      "called_at": "2026-09-27T20:47:12.845Z",
+      "completed_at": "2026-09-27T20:51:33.383Z"
+    },
+    {
+      "id": "tickets_1790541974998_02f2a657a0fbc",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-27T20:46:14.994Z",
+      "number": 1,
+      "code": "R001",
+      "service_id": "services_1790541936548_075a18967e58",
+      "category": "normal",
+      "counter_id": "counters_1790541954226_950574f62b84d",
+      "called_at": "2026-09-27T20:51:43.165Z",
+      "completed_at": "2026-09-27T20:51:52.866Z"
+    },
+    {
+      "id": "tickets_1790541975965_0db988f0ea0a7",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-27T20:46:15.961Z",
+      "number": 2,
+      "code": "R002",
+      "service_id": "services_1790541936548_075a18967e58",
+      "category": "normal",
+      "counter_id": "counters_1790541954226_950574f62b84d",
+      "called_at": "2026-09-27T20:53:05.483Z"
+    },
+    {
+      "id": "tickets_1790541978453_5995a0adbd135",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-27T20:46:18.447Z",
+      "number": 3,
+      "code": "R003",
+      "service_id": "services_1790541936548_075a18967e58",
+      "category": "priority",
+      "counter_id": "counters_1790541954226_950574f62b84d",
+      "called_at": "2026-09-27T20:47:06.773Z",
+      "completed_at": "2026-09-27T20:51:42.416Z"
+    },
+    {
+      "id": "tickets_1790541980331_9cfcad91a15f9",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-27T20:46:20.327Z",
+      "number": 2,
+      "code": "A002",
+      "service_id": "services_1790541925759_73dd695d0c3fc",
+      "category": "priority",
+      "counter_id": "counters_1790541947511_e94ad93b9b256",
+      "called_at": "2026-09-27T20:46:52.572Z",
+      "completed_at": "2026-09-27T20:46:53.237Z"
+    },
+    {
+      "id": "tickets_1790596293418_cf6ddd91b9011",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T11:51:33.413Z",
+      "number": 1,
+      "code": "V001",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790596307736_80ff6ecd5d334",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T11:51:47.731Z",
+      "number": 2,
+      "code": "V002",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790596736060_dfeb4d20f3b32",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T11:58:56.051Z",
+      "number": 3,
+      "code": "V003",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790596833980_b63431d2407b",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T12:00:33.976Z",
+      "number": 1,
+      "code": "R001",
+      "service_id": "services_1790541936548_075a18967e58",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790596835580_7455a63b15dc1",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T12:00:35.574Z",
+      "number": 4,
+      "code": "V004",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790596855129_903660a4af2cc",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-28T12:00:55.123Z",
+      "number": 1,
+      "code": "A001",
+      "service_id": "services_1790541925759_73dd695d0c3fc",
+      "category": "normal",
+      "counter_id": "counters_1790541947511_e94ad93b9b256",
+      "called_at": "2026-09-28T12:03:50.770Z",
+      "completed_at": "2026-09-28T12:04:32.417Z"
+    },
+    {
+      "id": "tickets_1790596856528_d377a26e282dc",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-28T12:00:56.523Z",
+      "number": 2,
+      "code": "A002",
+      "service_id": "services_1790541925759_73dd695d0c3fc",
+      "category": "normal",
+      "counter_id": "counters_1790541947511_e94ad93b9b256",
+      "called_at": "2026-09-28T12:04:35.631Z"
+    },
+    {
+      "id": "tickets_1790596860208_5db6c03dee46c",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-28T12:01:00.203Z",
+      "number": 3,
+      "code": "A003",
+      "service_id": "services_1790541925759_73dd695d0c3fc",
+      "category": "priority",
+      "counter_id": "counters_1790541960455_5e1cde44a69b1",
+      "called_at": "2026-09-28T12:03:15.521Z"
+    },
+    {
+      "id": "tickets_1790596862176_5baa41aad6c91",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T12:01:02.170Z",
+      "number": 5,
+      "code": "V005",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "priority"
+    },
+    {
+      "id": "tickets_1790596863881_5fc62eb3b5587",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-28T12:01:03.875Z",
+      "number": 2,
+      "code": "R002",
+      "service_id": "services_1790541936548_075a18967e58",
+      "category": "priority",
+      "counter_id": "counters_1790541954226_950574f62b84d",
+      "called_at": "2026-09-28T12:02:58.169Z"
+    },
+    {
+      "id": "tickets_1790783843891_ef6b3d2cb6f0a",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-30T15:57:23.884Z",
+      "number": 1,
+      "code": "A001",
+      "service_id": "services_1790541925759_73dd695d0c3fc",
+      "category": "normal",
+      "counter_id": "counters_1790541947511_e94ad93b9b256",
+      "called_at": "2026-09-30T16:00:47.295Z",
+      "completed_at": "2026-09-30T16:00:49.246Z"
+    },
+    {
+      "id": "tickets_1790783845639_e2e45e6c9a0de",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-30T15:57:25.634Z",
+      "number": 1,
+      "code": "V001",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790783846860_8300ff1d1f354",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-30T15:57:26.856Z",
+      "number": 1,
+      "code": "R001",
+      "service_id": "services_1790541936548_075a18967e58",
+      "category": "normal",
+      "counter_id": "counters_1790541960455_5e1cde44a69b1",
+      "called_at": "2026-09-30T16:01:32.813Z"
+    },
+    {
+      "id": "tickets_1790783847977_0a05fad7c2d6e",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-30T15:57:27.971Z",
+      "number": 2,
+      "code": "V002",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790783850423_35fbdd79fd386",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-30T15:57:30.418Z",
+      "number": 2,
+      "code": "R002",
+      "service_id": "services_1790541936548_075a18967e58",
+      "category": "priority",
+      "counter_id": "counters_1790541954226_950574f62b84d",
+      "called_at": "2026-09-30T16:01:27.929Z"
+    },
+    {
+      "id": "tickets_1790783852057_ee0ea3a3e137f",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-30T15:57:32.052Z",
+      "number": 2,
+      "code": "A002",
+      "service_id": "services_1790541925759_73dd695d0c3fc",
+      "category": "priority",
+      "counter_id": "counters_1790596208807_293c59e034706",
+      "called_at": "2026-09-30T15:57:54.664Z"
+    },
+    {
+      "id": "tickets_1790783853127_e8dbc6665daaf",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-30T15:57:33.123Z",
+      "number": 3,
+      "code": "V003",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "priority"
+    },
+    {
+      "id": "tickets_1790783854414_cc7335954ca6",
+      "ownerEmail": "bepure.labs@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-30T15:57:34.406Z",
+      "number": 4,
+      "code": "V004",
+      "service_id": "services_1790596141191_2e8d072c39687",
+      "category": "priority"
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "services": [
+    {
+      "id": "services_1790592318647_00c5e5d826f39",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "name": "Achat",
+      "prefix": "A",
+      "color": "#375ba9",
+      "active": true
+    },
+    {
+      "id": "services_1790592328197_ec9cb7ae0d5cf",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "name": "Vente",
+      "prefix": "V",
+      "color": "#1e2025",
+      "active": true
+    }
+  ],
+  "counters": [
+    {
+      "id": "counters_1790592337717_4ff13d4750324",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "name": "Guichet 1",
+      "service_ids": [
+        "services_1790592318647_00c5e5d826f39"
+      ],
+      "status": "busy",
+      "current_ticket_id": "tickets_1790690916440_3ef16e753a069"
+    },
+    {
+      "id": "counters_1790592344117_f6d858ab6b07c",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "name": "Guichet 2",
+      "service_ids": [
+        "services_1790592328197_ec9cb7ae0d5cf"
+      ],
+      "status": "busy",
+      "current_ticket_id": "tickets_1790592358619_0288d9aeac7de"
+    },
+    {
+      "id": "counters_1790592351263_53d3f9d5f5812",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "name": "Guichet 3",
+      "service_ids": [
+        "services_1790592328197_ec9cb7ae0d5cf",
+        "services_1790592318647_00c5e5d826f39"
+      ],
+      "status": "busy",
+      "current_ticket_id": "tickets_1790592361170_8d55656e8f0d7"
+    }
+  ],
+  "tickets": [
+    {
+      "id": "tickets_1790592356887_860d74460d0f5",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-28T10:45:56.882Z",
+      "number": 1,
+      "code": "A001",
+      "service_id": "services_1790592318647_00c5e5d826f39",
+      "category": "normal",
+      "counter_id": "counters_1790592337717_4ff13d4750324",
+      "called_at": "2026-09-28T11:05:27.871Z",
+      "completed_at": "2026-09-28T11:13:05.250Z"
+    },
+    {
+      "id": "tickets_1790592358619_0288d9aeac7de",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-28T10:45:58.614Z",
+      "number": 1,
+      "code": "V001",
+      "service_id": "services_1790592328197_ec9cb7ae0d5cf",
+      "category": "normal",
+      "counter_id": "counters_1790592344117_f6d858ab6b07c",
+      "called_at": "2026-09-28T11:33:05.569Z"
+    },
+    {
+      "id": "tickets_1790592359954_389a27783f91a",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-28T10:45:59.949Z",
+      "number": 2,
+      "code": "A002",
+      "service_id": "services_1790592318647_00c5e5d826f39",
+      "category": "normal",
+      "counter_id": "counters_1790592337717_4ff13d4750324",
+      "called_at": "2026-09-28T11:32:58.921Z"
+    },
+    {
+      "id": "tickets_1790592361170_8d55656e8f0d7",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-28T10:46:01.166Z",
+      "number": 3,
+      "code": "A003",
+      "service_id": "services_1790592318647_00c5e5d826f39",
+      "category": "normal",
+      "counter_id": "counters_1790592351263_53d3f9d5f5812",
+      "called_at": "2026-09-28T11:32:44.986Z"
+    },
+    {
+      "id": "tickets_1790592362336_f1e6ce8853acb",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T10:46:02.332Z",
+      "number": 2,
+      "code": "V002",
+      "service_id": "services_1790592328197_ec9cb7ae0d5cf",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790592363721_4ac3fc6ce0d3d",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T10:46:03.716Z",
+      "number": 3,
+      "code": "V003",
+      "service_id": "services_1790592328197_ec9cb7ae0d5cf",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790592365003_83edb67191b22",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-28T10:46:04.999Z",
+      "number": 4,
+      "code": "V004",
+      "service_id": "services_1790592328197_ec9cb7ae0d5cf",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790592367085_d587c23953d92",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-28T10:46:07.081Z",
+      "number": 4,
+      "code": "A004",
+      "service_id": "services_1790592318647_00c5e5d826f39",
+      "category": "priority",
+      "counter_id": "counters_1790592337717_4ff13d4750324",
+      "called_at": "2026-09-28T11:05:06.120Z",
+      "completed_at": "2026-09-28T11:05:10.152Z"
+    },
+    {
+      "id": "tickets_1790592368417_034b00aa42bfc",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "completed",
+      "created_date": "2026-09-28T10:46:08.413Z",
+      "number": 5,
+      "code": "V005",
+      "service_id": "services_1790592328197_ec9cb7ae0d5cf",
+      "category": "priority",
+      "counter_id": "counters_1790592344117_f6d858ab6b07c",
+      "called_at": "2026-09-28T11:05:03.137Z",
+      "completed_at": "2026-09-28T11:05:12.404Z"
+    },
+    {
+      "id": "tickets_1790690916440_3ef16e753a069",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "called",
+      "created_date": "2026-09-29T14:08:36.436Z",
+      "number": 1,
+      "code": "A001",
+      "service_id": "services_1790592318647_00c5e5d826f39",
+      "category": "normal",
+      "counter_id": "counters_1790592337717_4ff13d4750324",
+      "called_at": "2026-09-29T14:08:47.480Z"
+    },
+    {
+      "id": "tickets_1790690917859_4698a64f5fac3",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-29T14:08:37.856Z",
+      "number": 1,
+      "code": "V001",
+      "service_id": "services_1790592328197_ec9cb7ae0d5cf",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790690919657_5c147248fb0ca",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-29T14:08:39.654Z",
+      "number": 2,
+      "code": "V002",
+      "service_id": "services_1790592328197_ec9cb7ae0d5cf",
+      "category": "normal"
+    },
+    {
+      "id": "tickets_1790690920870_69cc12e681976",
+      "ownerEmail": "elfaroukikamal26@gmail.com",
+      "status": "waiting",
+      "created_date": "2026-09-29T14:08:40.868Z",
+      "number": 2,
+      "code": "A002",
+      "service_id": "services_1790592318647_00c5e5d826f39",
+      "category": "normal"
+    }
+  ]
+}
