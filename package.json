@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"node server/index.js\" \"vite --host 0.0.0.0\"",
+    "dev": "node scripts/dev.mjs",
     "server": "node server/index.js",
     "dev:frontend": "vite --host 0.0.0.0",
     "build": "vite build",
