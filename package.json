@@ -3,9 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "concurrently -k \"node server/index.js\" \"vite --host 0.0.0.0\"",
-    "server": "node server/index.js",
+   "scripts": {
+    "dev": "concurrently -k \"node server/cluster.js\" \"vite --host 0.0.0.0\"",
+    "server": "node server/cluster.js",
+    "start": "NODE_ENV=production node server/cluster.js",
     "dev:frontend": "vite --host 0.0.0.0",
     "build": "vite build",
     "lint": "eslint . --quiet",
