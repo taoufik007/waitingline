@@ -120,7 +120,15 @@ export default function Kiosk() {
   const [viewport, setViewport] = useState(() => getViewportMode());
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const currentDisplayToken = useMemo(() => getDisplayTokenForEmail(adminEmail), [adminEmail]);
+  // Lire le token depuis l'URL (?token=XXX), puis fallback sur l'admin connecté
+  const currentDisplayToken = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get('token');
+      if (urlToken) return String(urlToken).trim();
+    }
+    return getDisplayTokenForEmail(adminEmail);
+  }, [adminEmail]);
 
   const mirrorUrl = useMemo(() => {
     if (typeof window === 'undefined') return '/mirror';

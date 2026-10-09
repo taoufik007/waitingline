@@ -1,231 +1,307 @@
-import fs from 'fs/promises';
-import path from 'path';
-import crypto from 'crypto';
+import pool from './database.js';
 
 // ─────────────────────────────────────────────────────────────
-// PARTIE 1 : COMPTES + OTP → data.json (fichier global, verrou global)
+// PARTIE 1 : COMPTES + OTP + RESET TOKENS → tables MySQL
 // ─────────────────────────────────────────────────────────────
 
-const DATA_FILE = path.join(process.cwd(), 'server', 'data.json');
-
-const defaultData = {
-  accounts: {},
-  pendingOtps: {},
-  passwordResetTokens: {},
-};
-
-let globalWriteChain = Promise.resolve();
-const withGlobalLock = (task) => {
-  const run = globalWriteChain.then(task, task);
-  globalWriteChain = run.then(() => {}, () => {});
-  return run;
-};
-
-const readGlobalData = async () => {
-  try {
-    const raw = await fs.readFile(DATA_FILE, 'utf8');
-    const parsed = JSON.parse(raw || '{}');
+// Convertit une ligne SQL en objet account (au format attendu par l'app)
+const rowToAccount = (row) => {
+    if (!row) return null;
     return {
-      accounts: parsed.accounts || {},
-      pendingOtps: parsed.pendingOtps || {},
-      passwordResetTokens: parsed.passwordResetTokens || {},
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        role: row.role,
+        password: row.password,
+        createdAt: row.created_at,
+        provider: row.provider,
+        emailVerified: !!row.email_verified,
+        approver: !!row.approver,
+        approved: !!row.approved,
+        approvalToken: row.approval_token,
+        active: !!row.active,
+        sessionToken: row.session_token,
+        sessionTokens: row.session_tokens || [],
+        displayMode: row.display_mode,
+        parentAdminEmail: row.parent_admin_email,
+        assignedServiceIds: row.assigned_service_ids || [],
+        assignedCounterIds: row.assigned_counter_ids || [],
     };
-  } catch (err) {
-    if (err?.code === 'ENOENT') return { ...defaultData };
-    throw err;
-  }
-};
-
-const writeGlobalData = async (data) => {
-  const tmp = `${DATA_FILE}.tmp`;
-  await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-  await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
-  await fs.rename(tmp, DATA_FILE);
 };
 
 export const getAccount = async (email) => {
-  const data = await readGlobalData();
-  return data.accounts[email] || null;
+    const [rows] = await pool.query('SELECT * FROM accounts WHERE email = ?', [email]);
+    return rowToAccount(rows[0]);
 };
 
 export const hasAccount = async (email) => {
-  const acc = await getAccount(email);
-  return !!acc;
+    const [rows] = await pool.query('SELECT 1 FROM accounts WHERE email = ? LIMIT 1', [email]);
+    return rows.length > 0;
 };
 
 export const listAccounts = async () => {
-  const data = await readGlobalData();
-  return Object.values(data.accounts);
+    const [rows] = await pool.query('SELECT * FROM accounts');
+    return rows.map(rowToAccount);
 };
 
-export const setAccount = (email, account) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    data.accounts[email] = account;
-    await writeGlobalData(data);
+export const setAccount = async (email, account) => {
+    await pool.execute(
+        `INSERT INTO accounts (
+            id, email, name, role, password, created_at, provider,
+            email_verified, approver, approved, approval_token, active,
+            session_token, session_tokens, display_mode, parent_admin_email,
+            assigned_service_ids, assigned_counter_ids
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            role = VALUES(role),
+            password = VALUES(password),
+            provider = VALUES(provider),
+            email_verified = VALUES(email_verified),
+            approver = VALUES(approver),
+            approved = VALUES(approved),
+            approval_token = VALUES(approval_token),
+            active = VALUES(active),
+            session_token = VALUES(session_token),
+            session_tokens = VALUES(session_tokens),
+            display_mode = VALUES(display_mode),
+            parent_admin_email = VALUES(parent_admin_email),
+            assigned_service_ids = VALUES(assigned_service_ids),
+            assigned_counter_ids = VALUES(assigned_counter_ids)`,
+        [
+            account.id, email, account.name || null, account.role || 'agent',
+            account.password || null, account.createdAt || null, account.provider || null,
+            account.emailVerified ? 1 : 0, account.approver ? 1 : 0, account.approved ? 1 : 0,
+            account.approvalToken || null, account.active ? 1 : 0,
+            account.sessionToken || null,
+            JSON.stringify(account.sessionTokens || []),
+            account.displayMode || null, account.parentAdminEmail || null,
+            JSON.stringify(account.assignedServiceIds || []),
+            JSON.stringify(account.assignedCounterIds || [])
+        ]
+    );
     return account;
-  });
+};
 
-export const deleteAccount = (email) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    if (data.accounts[email]) delete data.accounts[email];
-    await writeGlobalData(data);
+export const deleteAccount = async (email) => {
+    await pool.execute('DELETE FROM accounts WHERE email = ?', [email]);
     return true;
-  });
+};
+
+// ─────────────────────────────────────────────────────────────
+// OTP
+// ─────────────────────────────────────────────────────────────
 
 export const getPendingOtp = async (email) => {
-  const data = await readGlobalData();
-  return data.pendingOtps[email] || null;
+    const [rows] = await pool.query('SELECT payload FROM pending_otps WHERE email = ?', [email]);
+    if (!rows[0]) return null;
+    // Le payload peut être déjà un objet (JSON) ou une string selon la config mysql2
+    return typeof rows[0].payload === 'string' ? JSON.parse(rows[0].payload) : rows[0].payload;
 };
 
-export const setPendingOtp = (email, payload) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    data.pendingOtps[email] = payload;
-    await writeGlobalData(data);
+export const setPendingOtp = async (email, payload) => {
+    await pool.execute(
+        `INSERT INTO pending_otps (email, payload) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE payload = VALUES(payload)`,
+        [email, JSON.stringify(payload)]
+    );
     return payload;
-  });
+};
 
-export const deletePendingOtp = (email) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    if (data.pendingOtps[email]) delete data.pendingOtps[email];
-    await writeGlobalData(data);
+export const deletePendingOtp = async (email) => {
+    await pool.execute('DELETE FROM pending_otps WHERE email = ?', [email]);
     return true;
-  });
+};
+
+// ─────────────────────────────────────────────────────────────
+// RESET TOKENS
+// ─────────────────────────────────────────────────────────────
 
 export const getPasswordResetToken = async (token) => {
-  const data = await readGlobalData();
-  return data.passwordResetTokens[token] || null;
+    const [rows] = await pool.query(
+        'SELECT email, created_at, expires_at FROM password_reset_tokens WHERE token = ?',
+        [token]
+    );
+    if (!rows[0]) return null;
+    return {
+        email: rows[0].email,
+        createdAt: rows[0].created_at,
+        expiresAt: rows[0].expires_at,
+    };
 };
 
-export const setPasswordResetToken = (token, payload) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    data.passwordResetTokens[token] = payload;
-    await writeGlobalData(data);
+export const setPasswordResetToken = async (token, payload) => {
+    await pool.execute(
+        `INSERT INTO password_reset_tokens (token, email, created_at, expires_at)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE email = VALUES(email)`,
+        [token, payload.email, payload.createdAt || null, payload.expiresAt || null]
+    );
     return payload;
-  });
+};
 
-export const deletePasswordResetToken = (token) =>
-  withGlobalLock(async () => {
-    const data = await readGlobalData();
-    if (data.passwordResetTokens[token]) delete data.passwordResetTokens[token];
-    await writeGlobalData(data);
+export const deletePasswordResetToken = async (token) => {
+    await pool.execute('DELETE FROM password_reset_tokens WHERE token = ?', [token]);
     return true;
-  });
+};
 
 // ─────────────────────────────────────────────────────────────
-// PARTIE 2 : SERVICES / GUICHETS / TICKETS → un fichier par client
-// (server/data-clients/<hash-de-l-email>.json), verrou par client
+// PARTIE 2 : SERVICES / COUNTERS / TICKETS → tables MySQL
 // ─────────────────────────────────────────────────────────────
-
-const ENTITIES_DIR = path.join(process.cwd(), 'server', 'data-clients');
 
 const VALID_ENTITY_TYPES = ['services', 'counters', 'tickets'];
 
 const assertValidType = (type) => {
-  if (!VALID_ENTITY_TYPES.includes(type)) {
-    const err = new Error(`Unknown entity type: ${type}`);
-    err.status = 400;
-    throw err;
-  }
+    if (!VALID_ENTITY_TYPES.includes(type)) {
+        const err = new Error(`Unknown entity type: ${type}`);
+        err.status = 400;
+        throw err;
+    }
 };
 
-// Même fonction de hash que dans le script de migration : ne pas modifier
-// sans re-migrer, sinon les fichiers existants ne seront plus retrouvés.
+// Gardé pour compatibilité (index.js l'importe peut-être encore)
+// Retourne un identifiant logique basé sur l'email, plus un chemin fichier
 export const fileForOwner = (ownerEmail) => {
-  const hash = crypto.createHash('sha256').update(ownerEmail).digest('hex').slice(0, 24);
-  return path.join(ENTITIES_DIR, `${hash}.json`);
+    return `mysql://waitingline/services?owner=${encodeURIComponent(ownerEmail)}`;
 };
 
-const defaultOwnerEntities = {
-  services: [],
-  counters: [],
-  tickets: [],
-};
-
-const readOwnerEntities = async (ownerEmail) => {
-  try {
-    const raw = await fs.readFile(fileForOwner(ownerEmail), 'utf8');
-    const parsed = JSON.parse(raw || '{}');
-    return {
-      services: parsed.services || [],
-      counters: parsed.counters || [],
-      tickets: parsed.tickets || [],
-    };
-  } catch (err) {
-    if (err?.code === 'ENOENT') return { ...defaultOwnerEntities };
-    throw err;
-  }
-};
-
-const writeOwnerEntities = async (ownerEmail, entities) => {
-  const file = fileForOwner(ownerEmail);
-  const tmp = `${file}.tmp`;
-  await fs.mkdir(ENTITIES_DIR, { recursive: true });
-  await fs.writeFile(tmp, JSON.stringify(entities, null, 2), 'utf8');
-  await fs.rename(tmp, file);
-};
-
-const locksByOwner = new Map();
-const withOwnerLock = (ownerEmail, task) => {
-  const previous = locksByOwner.get(ownerEmail) || Promise.resolve();
-  const run = previous.then(task, task);
-  locksByOwner.set(
-    ownerEmail,
-    run.then(() => {}, () => {})
-  );
-  return run;
+// Conversion d'une ligne SQL en objet du type attendu par l'app
+const rowToEntity = (type, row) => {
+    if (!row) return null;
+    if (type === 'services') {
+        return {
+            id: row.id,
+            ownerEmail: row.owner_email,
+            name: row.name,
+            prefix: row.prefix,
+            color: row.color,
+            active: !!row.active,
+            image: row.image,
+        };
+    }
+    if (type === 'counters') {
+        return {
+            id: row.id,
+            ownerEmail: row.owner_email,
+            name: row.name,
+            service_ids: row.service_ids || [],
+            status: row.status,
+            current_ticket_id: row.current_ticket_id,
+        };
+    }
+    if (type === 'tickets') {
+        return {
+            id: row.id,
+            ownerEmail: row.owner_email,
+            status: row.status,
+            created_date: row.created_date ? new Date(row.created_date).toISOString() : null,
+            number: row.number,
+            code: row.code,
+            service_id: row.service_id,
+            category: row.category,
+        };
+    }
+    return row;
 };
 
 export const listEntities = async (type, ownerEmail) => {
-  assertValidType(type);
-  const entities = await readOwnerEntities(ownerEmail);
-  return entities[type];
+    assertValidType(type);
+    const [rows] = await pool.query(
+        `SELECT * FROM ${type} WHERE owner_email = ?`,
+        [ownerEmail]
+    );
+    return rows.map((row) => rowToEntity(type, row));
 };
 
-export const createEntity = (type, ownerEmail, fields) =>
-  withOwnerLock(ownerEmail, async () => {
+export const createEntity = async (type, ownerEmail, fields) => {
     assertValidType(type);
-    const entities = await readOwnerEntities(ownerEmail);
-    const entity = {
-      id: `${type}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      ownerEmail,
-      ...fields,
-    };
-    entities[type].push(entity);
-    await writeOwnerEntities(ownerEmail, entities);
-    return entity;
-  });
+    const id = fields.id || `${type}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
-export const updateEntity = (type, id, ownerEmail, patch) =>
-  withOwnerLock(ownerEmail, async () => {
-    assertValidType(type);
-    const entities = await readOwnerEntities(ownerEmail);
-    const index = entities[type].findIndex((item) => item.id === id);
-    if (index === -1) {
-      const err = new Error('Entity not found');
-      err.status = 404;
-      throw err;
+    if (type === 'services') {
+        await pool.execute(
+            `INSERT INTO services (id, owner_email, name, prefix, color, active, image)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [id, ownerEmail, fields.name, fields.prefix || null, fields.color || null,
+             fields.active ? 1 : 0, fields.image || null]
+        );
+    } else if (type === 'counters') {
+        await pool.execute(
+            `INSERT INTO counters (id, owner_email, name, service_ids, status, current_ticket_id)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, ownerEmail, fields.name,
+             JSON.stringify(fields.service_ids || fields.serviceIds || []),
+             fields.status || 'closed', fields.current_ticket_id || null]
+        );
+    } else if (type === 'tickets') {
+        await pool.execute(
+            `INSERT INTO tickets (id, owner_email, status, created_date, number, code, service_id, category)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, ownerEmail, fields.status || 'waiting',
+             fields.created_date ? new Date(fields.created_date) : new Date(),
+             fields.number || null, fields.code || null,
+             fields.service_id || null, fields.category || null]
+        );
     }
-    entities[type][index] = { ...entities[type][index], ...patch };
-    await writeOwnerEntities(ownerEmail, entities);
-    return entities[type][index];
-  });
 
-export const deleteEntity = (type, id, ownerEmail) =>
-  withOwnerLock(ownerEmail, async () => {
+    const [rows] = await pool.query(`SELECT * FROM ${type} WHERE id = ?`, [id]);
+    return rowToEntity(type, rows[0]);
+};
+
+export const updateEntity = async (type, id, ownerEmail, patch) => {
     assertValidType(type);
-    const entities = await readOwnerEntities(ownerEmail);
-    const before = entities[type].length;
-    entities[type] = entities[type].filter((item) => item.id !== id);
-    if (entities[type].length === before) {
-      const err = new Error('Entity not found');
-      err.status = 404;
-      throw err;
+
+    // Vérifier que l'entité existe et appartient bien à ce owner
+    const [existing] = await pool.query(
+        `SELECT * FROM ${type} WHERE id = ? AND owner_email = ?`,
+        [id, ownerEmail]
+    );
+    if (!existing[0]) {
+        const err = new Error('Entity not found');
+        err.status = 404;
+        throw err;
     }
-    await writeOwnerEntities(ownerEmail, entities);
+
+    if (type === 'services') {
+        const merged = { ...rowToEntity(type, existing[0]), ...patch };
+        await pool.execute(
+            `UPDATE services SET name = ?, prefix = ?, color = ?, active = ?, image = ?
+             WHERE id = ? AND owner_email = ?`,
+            [merged.name, merged.prefix || null, merged.color || null,
+             merged.active ? 1 : 0, merged.image || null, id, ownerEmail]
+        );
+    } else if (type === 'counters') {
+        const merged = { ...rowToEntity(type, existing[0]), ...patch };
+        await pool.execute(
+            `UPDATE counters SET name = ?, service_ids = ?, status = ?, current_ticket_id = ?
+             WHERE id = ? AND owner_email = ?`,
+            [merged.name, JSON.stringify(merged.service_ids || []),
+             merged.status || null, merged.current_ticket_id || null, id, ownerEmail]
+        );
+    } else if (type === 'tickets') {
+        const merged = { ...rowToEntity(type, existing[0]), ...patch };
+        await pool.execute(
+            `UPDATE tickets SET status = ?, created_date = ?, number = ?, code = ?, service_id = ?, category = ?
+             WHERE id = ? AND owner_email = ?`,
+            [merged.status, merged.created_date ? new Date(merged.created_date) : null,
+             merged.number || null, merged.code || null, merged.service_id || null,
+             merged.category || null, id, ownerEmail]
+        );
+    }
+
+    const [rows] = await pool.query(`SELECT * FROM ${type} WHERE id = ?`, [id]);
+    return rowToEntity(type, rows[0]);
+};
+
+export const deleteEntity = async (type, id, ownerEmail) => {
+    assertValidType(type);
+    const [result] = await pool.execute(
+        `DELETE FROM ${type} WHERE id = ? AND owner_email = ?`,
+        [id, ownerEmail]
+    );
+    if (result.affectedRows === 0) {
+        const err = new Error('Entity not found');
+        err.status = 404;
+        throw err;
+    }
     return true;
-  });
+};

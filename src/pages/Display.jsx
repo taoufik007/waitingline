@@ -50,23 +50,22 @@ const pickVoice = (preferredGender = 'female') => {
   const frenchVoices = voices.filter((voice) => (voice.lang || '').toLowerCase().startsWith('fr'));
   const pool = frenchVoices.length ? frenchVoices : voices;
 
-  const normalizedGender = preferredGender === 'male' ? 'male' : 'female';
-  const maleMatchers = [
-    /(male|man|homme)/i,
-    /(david|daniel|paul|jacob|oliver|thomas|john|mark|michael|charles)/i,
-    /google.*(male|homme)/i,
-    /microsoft.*(david|paul|james|mark|michael|thomas)/i,
-  ];
-  const femaleMatchers = [
-    /(female|woman|femme)/i,
-    /(samantha|victoria|zira|aria|jenny|alice|sophie|claire|emma|zoe|ceri|nausicaa|nora|luna)/i,
-    /google.*(female|femme)/i,
-    /microsoft.*(samantha|zira|victoria|aria|jenny|sophie|claire|emma)/i,
-  ];
+  const priorityVoices = pool.filter((v) => /google|microsoft/i.test(v.name));
 
-  const matcherList = normalizedGender === 'male' ? maleMatchers : femaleMatchers;
-  const preferred = pool.find((voice) => matcherList.some((matcher) => matcher.test(voice.name || '')));
-  return preferred || pool[0];
+  const normalizedGender = preferredGender === 'male' ? 'male' : 'female';
+  
+  const maleNames = /(thomas|david|daniel|paul|james|mark|michael|charles|guillaume|nicolas|henri|yannick)/i;
+  const femaleNames = /(amelie|amélie|audrey|aurelie|aurélie|marie|julie|chantal|virginie|celine|céline|flo|samantha|victoria|zira|aria|jenny|sophie|claire|emma)/i;
+  
+  const targetMatcher = normalizedGender === 'male' ? maleNames : femaleNames;
+
+  const preferred = priorityVoices.find((v) => targetMatcher.test(v.name));
+  if (preferred) return preferred;
+
+  const anyMatch = pool.find((v) => targetMatcher.test(v.name));
+  if (anyMatch) return anyMatch;
+
+  return priorityVoices[0] || pool[0];
 };
 
 const fallbackNews = [
@@ -187,7 +186,9 @@ const getDisplayTokenMap = () => {
 
 const saveDisplayTokenMap = (map) => {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem('waitingline_display_token_map', JSON.stringify(map));
+  const existing = getDisplayTokenMap();
+  const merged = { ...existing, ...map };
+  window.localStorage.setItem('waitingline_display_token_map', JSON.stringify(merged));
 };
 
 const createMirrorToken = (email = '') => {
@@ -220,6 +221,12 @@ const getDisplayTokenForEmail = (email = '') => {
 
 export default function Display() {
   const { token: mirrorToken } = useParams();
+    // Support d'un token via query param : /ecran?token=XXX
+  const urlToken = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('token');
+  }, []);
   const [current, setCurrent] = useState(null);
   const [recent, setRecent] = useState([]);
   const [counters, setCounters] = useState({});
@@ -273,14 +280,21 @@ export default function Display() {
   }, []);
 
   const currentDisplayToken = useMemo(() => {
-    if (adminEmail) {
-      return getDisplayTokenForEmail(adminEmail);
+    // PRIORITÉ 1 : token dans l'URL (query param)
+    if (urlToken) {
+      return String(urlToken).trim();
     }
+    // PRIORITÉ 2 : token dans le path (mirror)
     if (mirrorToken) {
       return String(mirrorToken).trim();
     }
+    // PRIORITÉ 3 : token de l'admin connecté
+    if (adminEmail) {
+      return getDisplayTokenForEmail(adminEmail);
+    }
+    // Fallback
     return 'admin-display-default';
-  }, [adminEmail, mirrorToken]);
+  }, [adminEmail, mirrorToken, urlToken]);
 
   const isValidMirrorToken = useMemo(() => {
     if (!mirrorToken) return true;
@@ -446,11 +460,29 @@ export default function Display() {
 
   const enableSpeech = useCallback(() => {
     if (!('speechSynthesis' in window)) return;
+    
     try {
+      // Forcer le chargement des voix
+      window.speechSynthesis.getVoices();
+      
+      // Annuler toute lecture en cours
       window.speechSynthesis.cancel();
       window.speechSynthesis.resume();
-    } catch {}
-    setSpeechReady(true);
+      
+      // Marquer comme prêt
+      setSpeechReady(true);
+      
+      // DÉBLOCAGE : lire un vrai mot à volume très bas (volume 0 ne débloque pas Chrome)
+      const unlock = new SpeechSynthesisUtterance('ok');
+      unlock.volume = 0.01;
+      unlock.rate = 2;
+      unlock.lang = 'fr-FR';
+      window.speechSynthesis.speak(unlock);
+      
+      console.log('✅ Speech activé, voix disponibles:', window.speechSynthesis.getVoices().length);
+    } catch (e) {
+      console.error('Erreur activation speech:', e);
+    }
   }, []);
 
   const announceCurrentTicket = useCallback(() => {
@@ -459,7 +491,7 @@ export default function Display() {
     const voices = window.speechSynthesis.getVoices();
     if (!speechReady && voices.length === 0) return;
 
-    const announcementKey = `${current.id}:${current.code}:${current.counter_id}:${voiceGender}`;
+    const announcementKey = `${current.id}:${current.code}:${current.counter_id}:${current.called_at ?? ''}:${voiceGender}`;
     if (lastAnnouncementRef.current === announcementKey) return;
     if (queuedAnnouncementRef.current === announcementKey) return;
 
@@ -471,6 +503,9 @@ export default function Display() {
     utterance.volume = 1;
     const preferredVoice = pickVoice(voiceGender) || voices[0] || null;
     if (preferredVoice) utterance.voice = preferredVoice;
+
+    console.log('🔊 Annonce:', current.code, '| Voix:', preferredVoice?.name, '| Genre:', voiceGender);
+    console.log('🔊 Texte:', text);
 
     const startAnnouncement = () => {
       try {
@@ -501,7 +536,25 @@ export default function Display() {
       setVoiceEnabled(true);
     }
     enableSpeech();
-    setTimeout(() => announceCurrentTicket(), 150);
+    
+    // Attendre que les voix soient chargées, puis lire un vrai message
+    setTimeout(() => {
+      if ('speechSynthesis' in window) {
+        const voices = window.speechSynthesis.getVoices();
+        const frVoice = voices.find(v => v.lang.startsWith('fr'));
+        
+        const testUtterance = new SpeechSynthesisUtterance('Le son est activé');
+        testUtterance.lang = 'fr-FR';
+        testUtterance.volume = 1;
+        testUtterance.rate = 1;
+        if (frVoice) testUtterance.voice = frVoice;
+        
+        console.log('🔊 Test avec voix:', frVoice?.name || 'default');
+        window.speechSynthesis.speak(testUtterance);
+      }
+    }, 100);
+    
+    setTimeout(() => announceCurrentTicket(), 1000);
   }, [enableSpeech, voiceEnabled, announceCurrentTicket]);
 
   useEffect(() => {
@@ -523,20 +576,33 @@ export default function Display() {
   }, []);
 
   const load = useCallback(async () => {
-    const [tickets, counterListResult] = await Promise.all([
-      base44.entities.Ticket.filter({}, '-called_at', 100),
-      base44.entities.Counter.list(),
-    ]);
-    const counterMap = {};
-    counterListResult.forEach((c) => (counterMap[c.id] = c.name));
-    setCounters(counterMap);
-    setCounterList(counterListResult);
+    try {
+      const response = await fetch(`/api/public/display/${encodeURIComponent(currentDisplayToken)}`);
+      if (!response.ok) {
+        throw new Error(`Display API error: ${response.status}`);
+      }
+      const data = await response.json();
+      
+      const tickets = data.items || [];
+      const counterListResult = data.counters || [];
 
-    const activeToday = tickets.filter((t) => isToday(t.created_date) && (t.status === 'called' || t.status === 'serving'));
-    activeToday.sort((a, b) => new Date(b.called_at || 0) - new Date(a.called_at || 0));
-    setCurrent(activeToday[0] || null);
-    setRecent(activeToday.slice(1, 6));
-  }, []);
+      const counterMap = {};
+      counterListResult.forEach((c) => (counterMap[c.id] = c.name));
+      setCounters(counterMap);
+      setCounterList(counterListResult);
+
+      const activeToday = tickets.filter((t) => {
+        const ticketDay = t.created_date ? new Date(t.created_date).toDateString() : null;
+        const today = new Date().toDateString();
+        return ticketDay === today && (t.status === 'called' || t.status === 'serving');
+      });
+      activeToday.sort((a, b) => new Date(b.called_at || b.created_date || 0) - new Date(a.called_at || a.created_date || 0));
+      setCurrent(activeToday[0] || null);
+      setRecent(activeToday.slice(1, 6));
+    } catch (error) {
+      console.error('Failed to load display data:', error);
+    }
+  }, [currentDisplayToken]);
 
   useEffect(() => {
     load();
@@ -568,9 +634,6 @@ export default function Display() {
     };
   }, [enableSpeech, announceCurrentTicket]);
 
-  // Annonce vocale : déclenchée quand un ticket est appelé, y compris au premier
-  // chargement de l'écran si un ticket est déjà en cours. Le navigateur bloque la
-  // synthèse vocale tant qu'il n'y a pas eu une interaction utilisateur.
   useEffect(() => {
     const newCode = current?.code ?? null;
     const newCallKey = current ? `${current.id}:${current.called_at ?? ''}` : null;
@@ -723,9 +786,9 @@ export default function Display() {
               <button
                 type="button"
                 onClick={handleEnableVoice}
-                className={`mx-auto mt-4 rounded-full bg-gradient-to-r px-5 py-3 text-sm font-semibold shadow-lg ${isDarkMode ? 'from-[#9ED2FF] to-[#ABFFF9] text-[#082033] shadow-[#9ED2FF]/20' : 'from-indigo-200 to-emerald-200 text-indigo-900 shadow-indigo-200/80'}`}
+                className="mx-auto mt-4 animate-pulse rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 px-8 py-4 text-lg font-bold shadow-2xl text-white"
               >
-                Cliquez pour activer le son
+                🔊 Cliquez ici pour activer le son
               </button>
             )}
 

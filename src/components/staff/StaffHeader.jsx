@@ -1,7 +1,16 @@
 import { Link, useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { LayoutGrid, Settings, LogOut, Monitor, Tv } from 'lucide-react';
-
+const createMirrorToken = (email = '') => {
+  const value = String(email || '').trim();
+  if (!value) return 'admin-display-default';
+  try {
+    const encoded = btoa(unescape(encodeURIComponent(value)));
+    return encodeURIComponent(encoded.replace(/=+$/g, '')).replace(/%/g, '-');
+  } catch {
+    return encodeURIComponent(value.replace(/[^a-zA-Z0-9_-]/g, '-'));
+  }
+};
 export default function StaffHeader({ user }) {
   const location = useLocation();
   const role = String(user?.role || '').toLowerCase();
@@ -23,10 +32,20 @@ export default function StaffHeader({ user }) {
   };
 
   const links = [
-    ...(!isAgent ? [{ path: '/kiosk', label: 'Borne', icon: Monitor, newTab: true }] : []),
+    ...(!isAgent ? [{
+      path: `/kiosk?token=${createMirrorToken(user?.email || '')}`,
+      label: 'Borne',
+      icon: Monitor,
+      newTab: true,
+    }] : []),
     { path: '/agent', label: 'Agent', icon: LayoutGrid },
     ...(isAdmin ? [{ path: '/admin', label: 'Configuration', icon: Settings }] : []),
-    ...(isAdmin ? [{ path: '/ecran', label: 'Écran', icon: Tv, newTab: true }] : []),
+    ...(isAdmin ? [{
+      path: `/ecran?token=${createMirrorToken(user?.email || '')}`,
+      label: 'Écran',
+      icon: Tv,
+      newTab: true,
+    }] : []),
   ];
 
   return (
@@ -39,7 +58,7 @@ export default function StaffHeader({ user }) {
           </span>
           <nav className="hidden sm:flex items-center gap-1">
             {links.map((l) => {
-              const isCurrent = location.pathname === l.path;
+              const isCurrent = location.pathname === l.path.split('?')[0];
 
               if (l.newTab) {
                 return (

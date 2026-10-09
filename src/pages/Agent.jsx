@@ -84,19 +84,33 @@ export default function Agent() {
     localStorage.setItem('fa_counter_id', id);
   };
 
+  const callAgentApi = async (endpoint, body) => {
+    const token = base44.auth.getToken();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-session-token': token,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || 'Request failed');
+    }
+    return response.json();
+  };
+
   const handleCallNext = async () => {
-    if (!counter || sortedWaiting.length === 0) return;
+    if (!counter) return;
     setBusy(true);
     try {
-      const next = sortedWaiting[0];
-      await base44.entities.Ticket.update(next.id, {
-        status: 'called',
-        counter_id: counter.id,
-        called_at: new Date().toISOString(),
-      });
-      await base44.entities.Counter.update(counter.id, { current_ticket_id: next.id, status: 'busy' });
+      await callAgentApi('/api/agent/call-next', { counter_id: counter.id });
       setCallCount((c) => c + 1);
       await load();
+    } catch (error) {
+      console.error('call-next failed:', error);
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -106,13 +120,15 @@ export default function Agent() {
     if (!currentTicket || !counter) return;
     setBusy(true);
     try {
-      await base44.entities.Ticket.update(currentTicket.id, {
-        status: 'called',
+      await callAgentApi('/api/agent/update-current-ticket', {
+        ticket_id: currentTicket.id,
         counter_id: counter.id,
-        called_at: new Date().toISOString(),
+        action: 'recall',
       });
-      await base44.entities.Counter.update(counter.id, { current_ticket_id: currentTicket.id, status: 'busy' });
       await load();
+    } catch (error) {
+      console.error('recall failed:', error);
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -122,12 +138,15 @@ export default function Agent() {
     if (!currentTicket || !counter) return;
     setBusy(true);
     try {
-      await base44.entities.Ticket.update(currentTicket.id, {
-        status: 'completed',
-        completed_at: new Date().toISOString(),
+      await callAgentApi('/api/agent/update-current-ticket', {
+        ticket_id: currentTicket.id,
+        counter_id: counter.id,
+        action: 'complete',
       });
-      await base44.entities.Counter.update(counter.id, { current_ticket_id: '', status: 'available' });
       await load();
+    } catch (error) {
+      console.error('complete failed:', error);
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -137,9 +156,15 @@ export default function Agent() {
     if (!currentTicket || !counter) return;
     setBusy(true);
     try {
-      await base44.entities.Ticket.update(currentTicket.id, { status: 'missed' });
-      await base44.entities.Counter.update(counter.id, { current_ticket_id: '', status: 'available' });
+      await callAgentApi('/api/agent/update-current-ticket', {
+        ticket_id: currentTicket.id,
+        counter_id: counter.id,
+        action: 'missed',
+      });
       await load();
+    } catch (error) {
+      console.error('missed failed:', error);
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -149,13 +174,15 @@ export default function Agent() {
     if (!currentTicket || !counter) return;
     setBusy(true);
     try {
-      await base44.entities.Ticket.update(currentTicket.id, {
-        status: 'waiting',
-        counter_id: '',
-        called_at: null,
+      await callAgentApi('/api/agent/update-current-ticket', {
+        ticket_id: currentTicket.id,
+        counter_id: counter.id,
+        action: 'hold',
       });
-      await base44.entities.Counter.update(counter.id, { current_ticket_id: '', status: 'available' });
       await load();
+    } catch (error) {
+      console.error('hold failed:', error);
+      toast({ title: 'Erreur', description: error.message, variant: 'destructive' });
     } finally {
       setBusy(false);
     }

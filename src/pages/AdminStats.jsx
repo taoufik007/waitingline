@@ -1,7 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, BarChart3, CalendarDays, Clock3, Users } from 'lucide-react';
+import { ArrowLeft, BarChart3, CalendarDays, Clock3, Users, FileDown, Loader2 } from 'lucide-react';
+import {
+  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const formatDateKey = (value) => {
   if (!value) return 'Inconnu';
@@ -31,7 +37,21 @@ const normalizeDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const safeText = (value) => String(value || 'Inconnu');
+const STATUS_COLORS = {
+  waiting: '#f59e0b',
+  called: '#3b82f6',
+  serving: '#8b5cf6',
+  completed: '#10b981',
+  missed: '#ef4444',
+};
+
+const STATUS_LABELS = {
+  waiting: 'En attente',
+  called: 'Appelé',
+  serving: 'En cours',
+  completed: 'Terminé',
+  missed: 'Absent',
+};
 
 export default function AdminStats() {
   const [tickets, setTickets] = useState([]);
@@ -41,32 +61,9 @@ export default function AdminStats() {
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
-    const syncThemeFromStorage = () => {
-      const email =
-        window.sessionStorage.getItem('waitingline_active_user') ||
-        window.localStorage.getItem('waitingline_active_user') ||
-        (() => {
-          try {
-            const stored = JSON.parse(window.localStorage.getItem('waitingline_user') || window.sessionStorage.getItem('waitingline_user') || 'null');
-            return stored?.email || '';
-          } catch {
-            return '';
-          }
-        })();
-
-      const key = email ? `waitingline_theme_${String(email).trim().toLowerCase().replace(/[@.]/g, '_')}` : 'waitingline_active_theme';
-      const value = (email ? window.localStorage.getItem(key) || window.sessionStorage.getItem(key) : null) || window.localStorage.getItem('waitingline_active_theme') || window.sessionStorage.getItem('waitingline_active_theme') || 'light';
-      const root = document.documentElement;
-      root.classList.toggle('dark', value === 'dark');
-      root.dataset.theme = value === 'dark' ? 'dark' : 'light';
-    };
-
-    syncThemeFromStorage();
-    window.addEventListener('storage', syncThemeFromStorage);
-    return () => window.removeEventListener('storage', syncThemeFromStorage);
-  }, []);
+  const dashboardRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -74,7 +71,7 @@ export default function AdminStats() {
     const load = async () => {
       try {
         const [ticketList, serviceList, counterList, agentList] = await Promise.all([
-          base44.entities.Ticket.list('-created_date', 1000),
+          base44.entities.Ticket.list('-created_date', 5000),
           base44.entities.Service.list('name'),
           base44.entities.Counter.list('name'),
           fetch('/api/admin/agents', {
@@ -118,13 +115,8 @@ export default function AdminStats() {
       const ticketDate = normalizeDate(ticket.created_date || ticket.createdAt || ticket.called_at);
       if (!ticketDate) return true;
 
-      if (selectedYear !== 'all' && ticketDate.getFullYear() !== Number(selectedYear)) {
-        return false;
-      }
-
-      if (selectedMonth !== 'all' && ticketDate.getMonth() !== Number(selectedMonth)) {
-        return false;
-      }
+      if (selectedYear !== 'all' && ticketDate.getFullYear() !== Number(selectedYear)) return false;
+      if (selectedMonth !== 'all' && ticketDate.getMonth() !== Number(selectedMonth)) return false;
 
       return true;
     });
@@ -134,33 +126,6 @@ export default function AdminStats() {
     () => Object.fromEntries((services || []).map((service) => [service.id, service.name])),
     [services]
   );
-
-  const counterMap = useMemo(
-    () => Object.fromEntries((counters || []).map((counter) => [counter.id, counter])),
-    [counters]
-  );
-
-  const agentByCounter = useMemo(() => {
-    const map = new Map();
-
-    (agents || []).forEach((agent) => {
-      const assignedCounterIds = new Set((agent.assignedCounterIds || []).filter(Boolean).map(String));
-      const assignedServiceIds = new Set((agent.assignedServiceIds || []).filter(Boolean).map(String));
-
-      (counters || []).forEach((counter) => {
-        const counterId = String(counter.id);
-        const counterServices = new Set((counter.service_ids || []).filter(Boolean).map(String));
-        const matchesCounter = assignedCounterIds.has(counterId);
-        const matchesService = !![...assignedServiceIds].find((serviceId) => counterServices.has(serviceId));
-
-        if (matchesCounter || matchesService) {
-          map.set(counterId, agent);
-        }
-      });
-    });
-
-    return map;
-  }, [agents, counters]);
 
   const stats = useMemo(() => {
     const totals = {
@@ -172,14 +137,13 @@ export default function AdminStats() {
       waiting: 0,
       completed: 0,
       missed: 0,
+      called: 0,
     };
 
     const byService = new Map();
-    const byAgent = new Map();
     const byDay = new Map();
-    const byMonth = new Map();
-    const byYear = new Map();
     const byHour = new Map();
+    const byStatus = new Map();
 
     const now = new Date();
 
@@ -189,78 +153,81 @@ export default function AdminStats() {
       const createdDate = normalizeDate(ticket.created_date || ticket.createdAt || ticket.called_at);
       const status = String(ticket.status || 'waiting');
 
-      if (serviceId) {
-        const row = byService.get(serviceName) || { label: serviceName, total: 0, waiting: 0, completed: 0, called: 0, missed: 0 };
-        row.total += 1;
-        if (status === 'waiting') row.waiting += 1;
-        if (status === 'completed') row.completed += 1;
-        if (status === 'called' || status === 'serving') row.called += 1;
-        if (status === 'missed') row.missed += 1;
-        byService.set(serviceName, row);
-      }
+      // Par service
+      const row = byService.get(serviceName) || { label: serviceName, total: 0 };
+      row.total += 1;
+      byService.set(serviceName, row);
 
-      const counterId = String(ticket.counter_id || '');
-      const agent = counterId ? agentByCounter.get(counterId) : null;
-      const agentKey = agent ? `${agent.name} (${agent.email})` : 'Non affecté';
-      if (agentKey) {
-        const agentRow = byAgent.get(agentKey) || { label: agentKey, total: 0, services: new Set() };
-        agentRow.total += 1;
-        if (serviceId) agentRow.services.add(serviceName);
-        byAgent.set(agentKey, agentRow);
-      }
-
-      const dayKey = createdDate ? createdDate.toISOString().slice(0, 10) : 'unknown';
-      byDay.set(dayKey, (byDay.get(dayKey) || 0) + 1);
-
-      const monthKey = createdDate ? new Date(createdDate.getFullYear(), createdDate.getMonth(), 1).toISOString().slice(0, 7) : 'unknown';
-      byMonth.set(monthKey, (byMonth.get(monthKey) || 0) + 1);
-
-      const yearKey = createdDate ? String(createdDate.getFullYear()) : 'unknown';
-      byYear.set(yearKey, (byYear.get(yearKey) || 0) + 1);
-
-      const hour = createdDate ? createdDate.getHours() : null;
-      if (hour !== null) {
-        byHour.set(hour, (byHour.get(hour) || 0) + 1);
-      }
-
+      // Par jour (30 derniers jours)
       if (createdDate) {
-        const isToday = createdDate.toDateString() === now.toDateString();
-        if (isToday) totals.today += 1;
+        const dayKey = createdDate.toISOString().slice(0, 10);
+        byDay.set(dayKey, (byDay.get(dayKey) || 0) + 1);
+
+        const hour = createdDate.getHours();
+        byHour.set(hour, (byHour.get(hour) || 0) + 1);
+
+        if (createdDate.toDateString() === now.toDateString()) totals.today += 1;
         if (createdDate.getMonth() === now.getMonth() && createdDate.getFullYear() === now.getFullYear()) totals.thisMonth += 1;
         if (createdDate.getFullYear() === now.getFullYear()) totals.thisYear += 1;
       }
 
+      // Par statut
+      byStatus.set(status, (byStatus.get(status) || 0) + 1);
+
       if (status === 'completed') totals.completed += 1;
       if (status === 'waiting') totals.waiting += 1;
       if (status === 'missed') totals.missed += 1;
-      if (status === 'called' || status === 'serving') totals.served += 1;
+      if (status === 'called' || status === 'serving') {
+        totals.served += 1;
+        totals.called += 1;
+      }
     });
+
+    // Données pour graphique journalier (30 derniers jours)
+    const dayData = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      dayData.push({
+        day: d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+        tickets: byDay.get(key) || 0,
+      });
+    }
+
+    // Données par heure (0-23)
+    const hourData = [];
+    for (let h = 0; h < 24; h++) {
+      hourData.push({
+        hour: `${String(h).padStart(2, '0')}h`,
+        tickets: byHour.get(h) || 0,
+      });
+    }
+
+    // Données par statut pour camembert
+    const statusData = [...byStatus.entries()].map(([status, count]) => ({
+      name: STATUS_LABELS[status] || status,
+      value: count,
+      color: STATUS_COLORS[status] || '#94a3b8',
+    }));
+
+    // Top services
+    const serviceData = [...byService.entries()]
+      .map(([label, row]) => ({ name: label, tickets: row.total }))
+      .sort((a, b) => b.tickets - a.tickets)
+      .slice(0, 8);
 
     const busiestHour = [...byHour.entries()].sort((a, b) => b[1] - a[1])[0];
 
-    const topAgents = [...byAgent.entries()]
-      .map(([label, row]) => ({
-        label,
-        total: row.total,
-        services: [...row.services].slice(0, 3).join(', ') || 'Non défini',
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 8);
-
-    const dayRows = [...byDay.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 10);
-    const monthRows = [...byMonth.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12);
-    const yearRows = [...byYear.entries()].sort((a, b) => Number(b[0]) - Number(a[0])).slice(0, 8);
-
     return {
       totals,
-      topAgents,
-      byService: [...byService.entries()].map(([label, row]) => ({ ...row, label })).sort((a, b) => b.total - a.total),
-      dayRows,
-      monthRows,
-      yearRows,
+      dayData,
+      hourData,
+      statusData,
+      serviceData,
       busiestHour: busiestHour ? { hour: busiestHour[0], count: busiestHour[1] } : null,
     };
-  }, [filteredTickets, serviceMap, agentByCounter]);
+  }, [filteredTickets, serviceMap]);
 
   const filterLabel =
     selectedYear === 'all' && selectedMonth === 'all'
@@ -270,6 +237,44 @@ export default function AdminStats() {
         : selectedYear === 'all' && selectedMonth !== 'all'
           ? `Mois ${new Date(2000, Number(selectedMonth), 1).toLocaleString('fr-FR', { month: 'long' })}`
           : `Mois ${new Date(2000, Number(selectedMonth), 1).toLocaleString('fr-FR', { month: 'long' })} ${selectedYear}`;
+
+  const handleExportPdf = async () => {
+    if (!dashboardRef.current) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(dashboardRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth - 10;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 5;
+
+      pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight - 10;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 5;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 5, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight - 10;
+      }
+
+      pdf.save(`statistiques_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (e) {
+      console.error('PDF export failed', e);
+      window.alert('Erreur lors de l\'export PDF');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -285,15 +290,26 @@ export default function AdminStats() {
         <div className="mb-6 flex items-center justify-between gap-3">
           <div>
             <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Administration</p>
-            <h1 className="mt-2 text-3xl font-bold">Statistiques de fréquentation</h1>
+            <h1 className="mt-2 text-3xl font-bold">Tableau de bord</h1>
           </div>
-          <Link
-            to="/admin"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-          >
-            <ArrowLeft size={16} />
-            Retour admin
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
+              {exporting ? 'Génération…' : 'Exporter en PDF'}
+            </button>
+            <Link
+              to="/admin"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              <ArrowLeft size={16} />
+              Retour admin
+            </Link>
+          </div>
         </div>
 
         <div className="mb-8 rounded-2xl border border-border bg-card p-4">
@@ -342,139 +358,120 @@ export default function AdminStats() {
           </div>
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {[
-            { label: 'Total visiteurs', value: stats.totals.visitors, icon: Users },
-            { label: 'Aujourd’hui', value: stats.totals.today, icon: CalendarDays },
-            { label: 'Ce mois', value: stats.totals.thisMonth, icon: BarChart3 },
-            { label: 'Cette année', value: stats.totals.thisYear, icon: BarChart3 },
-            { label: 'Heure la plus chargée', value: stats.busiestHour ? formatHourLabel(stats.busiestHour.hour) : 'N/A', icon: Clock3 },
-          ].map((card) => (
-            <div key={card.label} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{card.label}</span>
-                <card.icon size={18} className="text-muted-foreground" />
+        <div ref={dashboardRef} style={{ backgroundColor: '#ffffff', padding: '20px' }}>
+          {/* Cartes KPI */}
+          <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {[
+              { label: 'Total visiteurs', value: stats.totals.visitors, icon: Users, color: 'text-blue-600 bg-blue-50' },
+              { label: "Aujourd'hui", value: stats.totals.today, icon: CalendarDays, color: 'text-green-600 bg-green-50' },
+              { label: 'Ce mois', value: stats.totals.thisMonth, icon: BarChart3, color: 'text-purple-600 bg-purple-50' },
+              { label: 'Cette année', value: stats.totals.thisYear, icon: BarChart3, color: 'text-indigo-600 bg-indigo-50' },
+              { label: 'Heure la plus chargée', value: stats.busiestHour ? formatHourLabel(stats.busiestHour.hour) : 'N/A', icon: Clock3, color: 'text-orange-600 bg-orange-50' },
+            ].map((card) => (
+              <div key={card.label} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">{card.label}</span>
+                  <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${card.color}`}>
+                    <card.icon size={16} />
+                  </span>
+                </div>
+                <p className="text-2xl font-bold">{card.value}</p>
               </div>
-              <p className="text-2xl font-bold">{card.value}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        <div className="mb-8 grid gap-6 xl:grid-cols-2">
+          {/* Graphique 1 : Évolution journalière */}
+          <div className="mb-6 rounded-2xl border border-border bg-card p-5">
+            <h2 className="mb-4 text-lg font-semibold">📈 Évolution des tickets (30 derniers jours)</h2>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={stats.dayData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="day" stroke="#64748b" style={{ fontSize: '12px' }} />
+                <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
+                <Tooltip />
+                <Line type="monotone" dataKey="tickets" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} name="Tickets" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Graphique 2 : Répartition par statut + Top services */}
+          <div className="mb-6 grid gap-6 lg:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <h2 className="mb-4 text-lg font-semibold">🥧 Répartition par statut</h2>
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={stats.statusData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={90}
+                    dataKey="value"
+                    label={({ name, value }) => `${name}: ${value}`}
+                  >
+                    {stats.statusData.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <h2 className="mb-4 text-lg font-semibold">🏆 Top services</h2>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={stats.serviceData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" stroke="#64748b" style={{ fontSize: '12px' }} />
+                  <YAxis dataKey="name" type="category" width={100} stroke="#64748b" style={{ fontSize: '12px' }} />
+                  <Tooltip />
+                  <Bar dataKey="tickets" fill="#10b981" name="Tickets" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Graphique 3 : Heures de pointe */}
+          <div className="mb-6 rounded-2xl border border-border bg-card p-5">
+            <h2 className="mb-4 text-lg font-semibold">⏰ Heures de pointe</h2>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={stats.hourData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="hour" stroke="#64748b" style={{ fontSize: '11px' }} />
+                <YAxis stroke="#64748b" style={{ fontSize: '12px' }} />
+                <Tooltip />
+                <Bar dataKey="tickets" fill="#f59e0b" name="Tickets" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Résumé opérationnel */}
           <div className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="mb-4 text-lg font-semibold">Par agent</h2>
-            <div className="space-y-3">
-              {stats.topAgents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune donnée d’agent disponible.</p>
-              ) : (
-                stats.topAgents.map((agent) => (
-                  <div key={agent.label} className="rounded-xl border border-border bg-background p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{agent.label}</p>
-                        <p className="text-xs text-muted-foreground">Services: {agent.services}</p>
-                      </div>
-                      <span className="rounded-full bg-primary/10 px-2.5 py-1 text-sm font-semibold text-primary">{agent.total}</span>
-                    </div>
-                  </div>
-                ))
-              )}
+            <h2 className="mb-4 text-lg font-semibold">📊 Résumé opérationnel</h2>
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="rounded-xl bg-amber-50 p-4">
+                <p className="text-sm text-amber-700">En attente</p>
+                <p className="mt-2 text-2xl font-bold text-amber-900">{stats.totals.waiting}</p>
+              </div>
+              <div className="rounded-xl bg-blue-50 p-4">
+                <p className="text-sm text-blue-700">Appelés / Servis</p>
+                <p className="mt-2 text-2xl font-bold text-blue-900">{stats.totals.served}</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 p-4">
+                <p className="text-sm text-emerald-700">Terminés</p>
+                <p className="mt-2 text-2xl font-bold text-emerald-900">{stats.totals.completed}</p>
+              </div>
+              <div className="rounded-xl bg-red-50 p-4">
+                <p className="text-sm text-red-700">Absents</p>
+                <p className="mt-2 text-2xl font-bold text-red-900">{stats.totals.missed}</p>
+              </div>
             </div>
+            {stats.busiestHour && (
+              <p className="mt-4 text-sm text-muted-foreground">
+                L'heure la plus chargée est <strong>{formatHourLabel(stats.busiestHour.hour)}</strong> avec <strong>{stats.busiestHour.count}</strong> visiteur(s).
+              </p>
+            )}
           </div>
-
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="mb-4 text-lg font-semibold">Par service</h2>
-            <div className="space-y-3">
-              {stats.byService.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune donnée de service disponible.</p>
-              ) : (
-                stats.byService.map((service) => (
-                  <div key={service.label} className="rounded-xl border border-border bg-background p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{service.label}</p>
-                        <p className="text-xs text-muted-foreground">Attente: {service.waiting} • Terminés: {service.completed} • Appelés: {service.called}</p>
-                      </div>
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-sm font-semibold text-emerald-700">{service.total}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-3">
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="mb-4 text-lg font-semibold">Par jour</h2>
-            <div className="space-y-2">
-              {stats.dayRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune donnée journalière.</p>
-              ) : (
-                stats.dayRows.map(([day, count]) => (
-                  <div key={day} className="flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm">
-                    <span>{formatDateKey(day)}</span>
-                    <strong>{count}</strong>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="mb-4 text-lg font-semibold">Par mois</h2>
-            <div className="space-y-2">
-              {stats.monthRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune donnée mensuelle.</p>
-              ) : (
-                stats.monthRows.map(([month, count]) => (
-                  <div key={month} className="flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm">
-                    <span>{formatMonthKey(`${month}-01`)}</span>
-                    <strong>{count}</strong>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="mb-4 text-lg font-semibold">Par année</h2>
-            <div className="space-y-2">
-              {stats.yearRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune donnée annuelle.</p>
-              ) : (
-                stats.yearRows.map(([year, count]) => (
-                  <div key={year} className="flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm">
-                    <span>{year}</span>
-                    <strong>{count}</strong>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8 rounded-2xl border border-border bg-card p-5">
-          <h2 className="mb-4 text-lg font-semibold">Résumé opérationnel</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl bg-background p-4">
-              <p className="text-sm text-muted-foreground">En attente</p>
-              <p className="mt-2 text-2xl font-bold">{stats.totals.waiting}</p>
-            </div>
-            <div className="rounded-xl bg-background p-4">
-              <p className="text-sm text-muted-foreground">Servis / appelés</p>
-              <p className="mt-2 text-2xl font-bold">{stats.totals.served}</p>
-            </div>
-            <div className="rounded-xl bg-background p-4">
-              <p className="text-sm text-muted-foreground">Terminés</p>
-              <p className="mt-2 text-2xl font-bold">{stats.totals.completed}</p>
-            </div>
-          </div>
-          {stats.busiestHour && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              L’heure la plus chargée est <strong>{formatHourLabel(stats.busiestHour.hour)}</strong> avec <strong>{stats.busiestHour.count}</strong> visiteur(s) enregistrés.
-            </p>
-          )}
         </div>
       </div>
     </div>

@@ -104,6 +104,40 @@ export default function Admin() {
   const [creatingAgent, setCreatingAgent] = useState(false);
   const [kioskConfig, setKioskConfig] = useState(() => getKioskConfig());
 
+  // ⬇️ Fonctions définies AVANT les useEffect
+  const loadKioskConfigFromServer = useCallback(async () => {
+    try {
+      const token = getCurrentAdminToken();
+      const response = await fetch('/api/kiosk-config', {
+        headers: { 'x-session-token': token },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.config) {
+        setKioskConfig((current) => ({ ...current, ...data.config }));
+      }
+    } catch (e) {
+      console.error('load kiosk config failed', e);
+    }
+  }, []);
+
+  const saveKioskConfigToServer = useCallback(async (config) => {
+    try {
+      const token = getCurrentAdminToken();
+      await fetch('/api/kiosk-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-token': token,
+        },
+        body: JSON.stringify(config),
+      });
+    } catch (e) {
+      console.error('save kiosk config failed', e);
+    }
+  }, []);
+
+  // Voix : chargement
   useEffect(() => {
     const currentEmail = user?.email || readCurrentStorageValue('waitingline_active_user') || '';
     const key = getVoiceStorageKey(currentEmail);
@@ -111,6 +145,7 @@ export default function Admin() {
     setVoiceGender(stored === 'male' ? 'male' : 'female');
   }, [user]);
 
+  // Chargement des données admin
   const load = useCallback(async () => {
     const sessionToken = getCurrentAdminToken();
     const [s, c, a] = await Promise.all([
@@ -130,11 +165,18 @@ export default function Admin() {
     setLoading(false);
   }, []);
 
+  // Chargement initial : user + kiosk config
   useEffect(() => {
-    base44.auth.me().then(setUser);
+    base44.auth.me().then((u) => {
+      setUser(u);
+      if (u?.email) {
+        loadKioskConfigFromServer();
+      }
+    });
     load();
-  }, [load]);
+  }, [load, loadKioskConfigFromServer]);
 
+  // Voix : sauvegarde
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const currentEmail = user?.email || readCurrentStorageValue('waitingline_active_user') || '';
@@ -144,11 +186,15 @@ export default function Admin() {
     window.dispatchEvent(new StorageEvent('storage', { key, newValue: voiceGender }));
   }, [voiceGender, user]);
 
+  // Kiosk config : sauvegarde dans localStorage + MySQL
   useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem('waitingline_kiosk_config', JSON.stringify(kioskConfig));
     window.dispatchEvent(new CustomEvent('waitingline-kiosk-config-updated', { detail: kioskConfig }));
-  }, [kioskConfig]);
+    if (user?.email) {
+      saveKioskConfigToServer(kioskConfig);
+    }
+  }, [kioskConfig, user, saveKioskConfigToServer]);
 
   const updateKioskConfig = (updates) => {
     setKioskConfig((current) => ({ ...current, ...updates }));
@@ -285,7 +331,7 @@ export default function Admin() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="font-heading text-2xl font-bold mb-1">Configuration</h1>
-            <p className="text-muted-foreground text-sm">Gérez vos services, vos guichets et la voix d’annonce.</p>
+            <p className="text-muted-foreground text-sm">Gérez vos services, vos guichets et la voix d'annonce.</p>
           </div>
           <a
             href="/admin/statistiques"
@@ -299,7 +345,7 @@ export default function Admin() {
         <div className="rounded-2xl border border-border bg-card p-6">
           <h2 className="font-heading text-xl font-semibold mb-4">Paramètres de la borne</h2>
           <p className="text-sm text-muted-foreground mb-5">
-            Personnalisez la couleur, le fond, l’effet visuel, le logo, le mode d’affichage et le plein écran de la page borne client.
+            Personnalisez la couleur, le fond, l'effet visuel, le logo, le mode d'affichage et le plein écran de la page borne client.
           </p>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -430,7 +476,7 @@ export default function Admin() {
               </label>
 
               <label className="flex items-center justify-between gap-3 text-sm text-foreground">
-                <span>Afficher l’option prioritaire</span>
+                <span>Afficher l'option prioritaire</span>
                 <input
                   type="checkbox"
                   checked={kioskConfig.showPriorityOption}
@@ -453,9 +499,9 @@ export default function Admin() {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="font-heading text-xl font-semibold mb-4">Voix d’annonce</h2>
+          <h2 className="font-heading text-xl font-semibold mb-4">Voix d'annonce</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Choisissez la voix utilisée pour lire les numéros appelés sur l’écran d’affichage.
+            Choisissez la voix utilisée pour lire les numéros appelés sur l'écran d'affichage.
           </p>
 
           <div className="flex flex-wrap gap-3">
