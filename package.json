@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-   "scripts": {
+  "scripts": {
     "dev": "concurrently -k \"node server/cluster.js\" \"vite --host 0.0.0.0\"",
     "server": "node server/cluster.js",
     "start": "NODE_ENV=production node server/cluster.js",
@@ -50,6 +50,7 @@
     "@stripe/react-stripe-js": "^3.0.0",
     "@stripe/stripe-js": "^5.2.0",
     "@tanstack/react-query": "^5.84.1",
+    "bcrypt": "^6.0.0",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -63,6 +64,7 @@
     "framer-motion": "^11.16.4",
     "html2canvas": "^1.4.1",
     "input-otp": "^1.4.2",
+    "ioredis": "^6.0.0",
     "jspdf": "^4.2.1",
     "lodash": "^4.17.21",
     "lucide-react": "^0.475.0",

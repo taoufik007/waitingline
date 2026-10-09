@@ -1,5 +1,5 @@
 import pool from './database.js';
-
+import bcrypt from 'bcrypt';
 // ─────────────────────────────────────────────────────────────
 // PARTIE 1 : COMPTES + OTP + RESET TOKENS → tables MySQL
 // ─────────────────────────────────────────────────────────────
@@ -45,6 +45,16 @@ export const listAccounts = async () => {
 };
 
 export const setAccount = async (email, account) => {
+    // ═══════════════════════════════════════════════════════════
+    // Hashage du mot de passe si nécessaire
+    // ═══════════════════════════════════════════════════════════
+    let passwordToSave = account.password || null;
+
+    // Si le mot de passe n'est pas déjà hashé (ne commence pas par $2a$ ou $2b$)
+    if (passwordToSave && !passwordToSave.startsWith('$2a$') && !passwordToSave.startsWith('$2b$')) {
+        passwordToSave = await bcrypt.hash(passwordToSave, 12);
+    }
+
     await pool.execute(
         `INSERT INTO accounts (
             id, email, name, role, password, created_at, provider,
@@ -70,7 +80,7 @@ export const setAccount = async (email, account) => {
             assigned_counter_ids = VALUES(assigned_counter_ids)`,
         [
             account.id, email, account.name || null, account.role || 'agent',
-            account.password || null, account.createdAt || null, account.provider || null,
+            passwordToSave, account.createdAt || null, account.provider || null,
             account.emailVerified ? 1 : 0, account.approver ? 1 : 0, account.approved ? 1 : 0,
             account.approvalToken || null, account.active ? 1 : 0,
             account.sessionToken || null,

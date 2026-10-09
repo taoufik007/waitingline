@@ -604,17 +604,114 @@ export default function Display() {
     }
   }, [currentDisplayToken]);
 
+   // ⬇️ Ref stable pour currentDisplayToken (évite les reconnexions SSE)
+  const currentDisplayTokenRef = useRef(currentDisplayToken);
   useEffect(() => {
-    load();
-    const unsubscribe = base44.entities.Ticket.subscribe(() => load());
-    const poll = setInterval(load, 3000);
+    currentDisplayTokenRef.current = currentDisplayToken;
+  }, [currentDisplayToken]);
+
+  // ⬇️ Ref stable pour load (évite les reconnexions SSE)
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+
+  // ⬇️ Effet SSE : ne redémarre QUE quand currentDisplayToken change
+  useEffect(() => {
+    // 1. Charger une première fois
+    loadRef.current();
+
+    // 2. Horloge
     const clock = setInterval(() => setNow(new Date()), 1000);
+
+    // 3. SSE
+    let eventSource = null;
+    let fallbackPoll = null;
+
+    const connectSSE = () => {
+      try {
+        const token = currentDisplayTokenRef.current;
+        eventSource = new EventSource(`/api/public/display/stream/${encodeURIComponent(token)}`);
+
+        eventSource.addEventListener('connected', () => {
+          console.log('[Display] SSE connecté');
+          if (fallbackPoll) {
+            clearInterval(fallbackPoll);
+            fallbackPoll = null;
+            console.log('[Display] Polling arrêté (SSE actif)');
+          }
+        });
+        eventSource.addEventListener('ticket-update', (event) => {
+          console.log('🔥 [Display] ticket-update reçu:', event.data);
+        });
+
+        eventSource.addEventListener('heartbeat', () => {
+          console.log('💓 [Display] heartbeat reçu');
+        });
+
+        eventSource.addEventListener('error', (err) => {
+          console.error('❌ [Display] SSE erreur:', err);
+        });
+        eventSource.addEventListener('init', (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            const counterListResult = data.counters || [];
+            const counterMap = {};
+            counterListResult.forEach((c) => (counterMap[c.id] = c.name));
+            setCounters(counterMap);
+            setCounterList(counterListResult);
+
+            const tickets = data.items || [];
+            const activeToday = tickets.filter((t) => {
+              const ticketDay = t.created_date ? new Date(t.created_date).toDateString() : null;
+              const today = new Date().toDateString();
+              return ticketDay === today && (t.status === 'called' || t.status === 'serving');
+            });
+            activeToday.sort((a, b) => new Date(b.called_at || b.created_date || 0) - new Date(a.called_at || a.created_date || 0));
+            setCurrent(activeToday[0] || null);
+            setRecent(activeToday.slice(1, 6));
+          } catch (e) {
+            console.error('[Display] init parse error', e);
+          }
+        });
+
+        eventSource.addEventListener('ticket-update', () => {
+          console.log('[Display] Mise à jour reçue via SSE');
+          loadRef.current();
+        });
+
+        eventSource.addEventListener('error', () => {
+          console.error('[Display] SSE error, reconnexion dans 5s');
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          if (!fallbackPoll) {
+            console.log('[Display] Fallback polling activé');
+            fallbackPoll = setInterval(() => loadRef.current(), 3000);
+          }
+          setTimeout(connectSSE, 5000);
+        });
+      } catch (e) {
+        console.error('[Display] SSE connexion échouée', e);
+        if (!fallbackPoll) {
+          fallbackPoll = setInterval(() => loadRef.current(), 3000);
+        }
+      }
+    };
+
+    connectSSE();
+
     return () => {
-      unsubscribe();
-      clearInterval(poll);
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (fallbackPoll) {
+        clearInterval(fallbackPoll);
+      }
       clearInterval(clock);
     };
-  }, [load]);
+  }, [currentDisplayToken]);   // ⬅️ UNIQUEMENT currentDisplayToken
 
   useEffect(() => {
     const unlockSpeechOnInteraction = () => {

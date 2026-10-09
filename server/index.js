@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcrypt';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
@@ -34,6 +35,7 @@ import {
   deleteEntity,
 } from './storage.js';
 
+import { addClient, broadcast, getClientCount, getStats } from './sse.js';
 import pool from './database.js';
 import { fetchMoroccanNews } from './newsService.js';
 import { normalizeRole } from './roleUtils.js';
@@ -320,6 +322,98 @@ app.post('/api/contact', async (req, res) => {
   }
 });
 // ─────────────────────────────────────────────────────────────
+// ROUTE SSE : Stream des tickets en temps réel
+// ─────────────────────────────────────────────────────────────
+// Cette route garde la connexion ouverte et pousse les mises à jour
+// aux clients (écrans Display) quand un ticket change.
+app.get('/api/public/display/stream/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim();
+    let ownerEmail = null;
+
+    // Décoder le token pour trouver l'admin
+    if (token === 'admin-display-default') {
+      const [rows] = await pool.query(
+        `SELECT a.email FROM accounts a
+         WHERE a.role = 'admin' AND a.active = 1 AND a.approved = 1
+           AND EXISTS (SELECT 1 FROM services s WHERE s.owner_email = a.email)
+         ORDER BY a.created_at ASC LIMIT 1`
+      );
+      ownerEmail = rows[0]?.email || null;
+    } else {
+      try {
+        const base64 = token.replace(/-/g, '%');
+        ownerEmail = Buffer.from(decodeURIComponent(base64), 'base64').toString('utf-8').trim();
+      } catch {
+        return res.status(400).json({ message: 'Invalid display token' });
+      }
+    }
+
+    if (!ownerEmail) {
+      return res.status(404).json({ message: 'Owner not found for this token' });
+    }
+
+    // Vérifier que l'owner existe
+    const [accounts] = await pool.query(
+      'SELECT email, name FROM accounts WHERE email = ? LIMIT 1',
+      [ownerEmail]
+    );
+    if (!accounts[0]) {
+      return res.status(404).json({ message: 'Owner not found' });
+    }
+
+    console.log(`[SSE] Nouvelle connexion stream pour ${ownerEmail}`);
+
+    // Ajouter le client au gestionnaire SSE
+    addClient(ownerEmail, res);
+
+    // Envoyer immédiatement l'état actuel
+    const [tickets] = await pool.query(
+      `SELECT * FROM tickets 
+       WHERE owner_email = ? 
+       AND status IN ('waiting', 'called', 'serving')
+       ORDER BY created_date DESC 
+       LIMIT 200`,
+      [ownerEmail]
+    );
+
+    const [counters] = await pool.query(
+      'SELECT * FROM counters WHERE owner_email = ?',
+      [ownerEmail]
+    );
+
+    const initialData = {
+      items: tickets.map((t) => ({
+        id: t.id,
+        ownerEmail: t.owner_email,
+        status: t.status,
+        created_date: t.created_date ? new Date(t.created_date).toISOString() : null,
+        number: t.number,
+        code: t.code,
+        service_id: t.service_id,
+        counter_id: t.counter_id,
+        category: t.category,
+        called_at: t.called_at ? new Date(t.called_at).toISOString() : null,
+      })),
+      counters: counters.map((c) => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        current_ticket_id: c.current_ticket_id,
+        service_ids: c.service_ids || [],
+      })),
+    };
+
+    // Envoyer l'état initial via SSE
+    res.write(`event: init\ndata: ${JSON.stringify(initialData)}\n\n`);
+  } catch (err) {
+    console.error('SSE stream error', err);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'Failed to open SSE stream' });
+    }
+  }
+});
+// ─────────────────────────────────────────────────────────────
 // ROUTE PUBLIQUE : Display + Mirror (pas de session requise)
 // ─────────────────────────────────────────────────────────────
 // Cette route est utilisée par :
@@ -533,9 +627,29 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(404).json({ message: 'No account found for this email. Please create an account first.' });
     }
 
-    if (account.password !== password) {
-      return res.status(401).json({ message: 'Incorrect password' });
-    }
+           // ═══════════════════════════════════════════════════════════
+        // Vérification du mot de passe (hashé ou en clair pour migration)
+        // ═══════════════════════════════════════════════════════════
+        let passwordValid = false;
+
+        if (account.password && (account.password.startsWith('$2a$') || account.password.startsWith('$2b$'))) {
+            // Mot de passe hashé → comparer avec bcrypt
+            passwordValid = await bcrypt.compare(password, account.password);
+        } else {
+            // Mot de passe en clair → comparaison directe + migration
+            passwordValid = account.password === password;
+
+            if (passwordValid) {
+                // Migrer vers un mot de passe hashé
+                const hashedPassword = await bcrypt.hash(password, 12);
+                await setAccount(email, { ...account, password: hashedPassword });
+                console.log(`[Migration] Mot de passe hashé pour ${email}`);
+            }
+        }
+
+        if (!passwordValid) {
+            return res.status(401).json({ message: 'Incorrect password' });
+        }
 
     if (account.provider !== 'google' && !account.emailVerified) {
       return res.status(403).json({ message: 'Email not verified. Please verify your email before logging in.' });
@@ -884,8 +998,23 @@ app.post('/api/approvals/login', async (req, res) => {
     if (!isValidEmail(email)) return res.status(400).json({ message: 'Please enter a valid email address' });
     const account = await getAccount(email);
     if (!account) return res.status(404).json({ message: 'No account found for this email' });
-    if (account.password !== password) return res.status(401).json({ message: 'Incorrect password' });
-    if (!account.approver) return res.status(403).json({ message: 'Not authorized for approvals' });
+    // Vérification du mot de passe (hashé ou en clair pour migration)
+let passwordValid = false;
+
+if (account.password && (account.password.startsWith('$2a$') || account.password.startsWith('$2b$'))) {
+  passwordValid = await bcrypt.compare(password, account.password);
+} else {
+  passwordValid = account.password === password;
+  if (passwordValid) {
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await setAccount(email, { ...account, password: hashedPassword });
+    console.log(`[Migration] Mot de passe hashé pour ${email}`);
+  }
+}
+
+if (!passwordValid) {
+  return res.status(401).json({ message: 'Incorrect password' });
+}    if (!account.approver) return res.status(403).json({ message: 'Not authorized for approvals' });
 
     if (account.active === false) {
       return res.status(403).json({ message: 'Ce compte a été désactivé.' });
@@ -1373,7 +1502,13 @@ app.post('/api/agent/call-next', async (req, res) => {
     );
 
     await connection.commit();
-
+    // Notifier les clients SSE du changement
+    broadcast(owner.email, 'ticket-update', {
+      action: 'call-next',
+      ticketId: nextTicketId,
+      counterId: counter_id,
+      timestamp: Date.now(),
+    });
     const [updated] = await pool.query('SELECT * FROM tickets WHERE id = ?', [nextTicketId]);
     return res.json({
       item: {
@@ -1451,7 +1586,17 @@ app.post('/api/agent/update-current-ticket', async (req, res) => {
       );
     }
 
+    // ⚠️ COMMIT AVANT le broadcast (sinon les clients lisent les anciennes données)
     await connection.commit();
+
+    // Notifier les clients SSE du changement (APRÈS le commit)
+    broadcast(owner.email, 'ticket-update', {
+      action,
+      ticketId: ticket_id,
+      counterId: counter_id,
+      timestamp: Date.now(),
+    });
+
     return res.json({ success: true });
   } catch (err) {
     await connection.rollback();
