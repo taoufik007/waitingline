@@ -1,1 +1,0 @@
-0 3 * * * /Users/zhirinouhaila/waitingline/backup-db.sh >> /Users/zhirinouhaila/waitingline/backups/cron.log 2>&1
